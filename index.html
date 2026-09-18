@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#1c232b">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
 <style>
   :root{
     --steel-900:#1c232b; --steel-700:#3a4552; --steel-500:#5b6773;
@@ -66,6 +67,11 @@
   .hint{font-size:.82rem; color:var(--steel-500); margin-top:6px;}
   .settings-bar{background:#fff8ec; border:1px solid #f0d9ad; border-radius:8px; padding:12px 14px; margin-bottom:16px; font-size:.85rem;}
   .settings-bar.ok{background:#eef7f1; border-color:#bfe0cc;}
+  .cam-wrap{position:relative; max-width:420px; margin:0 auto 14px; border-radius:10px; overflow:hidden; background:#000; display:none;}
+  .cam-wrap.show{display:block;}
+  .cam-wrap video{width:100%; display:block;}
+  .cam-frame{position:absolute; inset:15%; border:3px solid var(--amber); border-radius:12px; pointer-events:none;}
+  .cam-status{position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,.6); color:#fff; font-size:.8rem; padding:6px 10px; text-align:center;}
   .trip-bar{background:var(--steel-100); border:1px solid var(--steel-200); border-radius:8px; padding:12px 14px; margin-bottom:16px;}
   .summary-bar{display:flex; gap:20px; background:var(--steel-100); border-radius:8px; padding:14px 18px; margin-bottom:16px; flex-wrap:wrap;}
   .summary-item{display:flex; flex-direction:column;}
@@ -182,6 +188,10 @@
           <label>รหัสรอบนับ</label>
           <input type="text" id="countSessionInput" placeholder="เช่น CNT-0918">
         </div>
+        <div style="flex:1;">
+          <label>วันที่นับสต็อค</label>
+          <input type="text" id="countDateInput" placeholder="เช่น 18/9/2569">
+        </div>
         <button class="btn btn-ghost" id="genSessionBtn">เริ่มรอบใหม่</button>
       </div>
       <label style="display:flex; align-items:center; gap:8px; margin-top:12px; margin-bottom:0; cursor:pointer;">
@@ -196,7 +206,18 @@
       <div class="summary-item"><span class="num" id="summaryQtyTotal">0</span><span class="lbl">รวมจำนวนสินค้า (คู่)</span></div>
     </div>
 
-    <label>ยิง QR ที่กล่อง เพื่อบันทึกว่านับแล้ว (ทำจาก LINE บนมือถือได้เลย ไล่ยิงทีละกล่องไปเรื่อยๆ)</label>
+    <div class="btn-row" style="margin-top:0;">
+      <button class="btn btn-primary" id="camStartBtn">📷 เปิดกล้องสแกนต่อเนื่อง</button>
+      <button class="btn btn-ghost" id="camStopBtn" style="display:none;">ปิดกล้อง</button>
+    </div>
+    <div class="cam-wrap" id="camWrap">
+      <video id="camVideo" playsinline muted></video>
+      <div class="cam-frame"></div>
+      <div class="cam-status" id="camStatus">เล็งกล้องไปที่ QR บนกล่อง</div>
+    </div>
+    <canvas id="camCanvas" style="display:none;"></canvas>
+
+    <label>หรือยิงด้วยเครื่อง handheld / พิมพ์รหัสเอง</label>
     <input type="text" id="stockScanInput" placeholder="รอรับข้อมูลจากเครื่องสแกน...">
     <div class="hint">กล่องเดียวกันยิงซ้ำในรอบนี้จะไม่บันทึกซ้ำใน Google Sheet</div>
     <div id="stockScanResultArea"></div>
@@ -570,15 +591,25 @@ function genSessionId(){
 }
 function loadSessionId(){
   document.getElementById('countSessionInput').value = localStorage.getItem('boxqr_count_session') || '';
+  document.getElementById('countDateInput').value = localStorage.getItem('boxqr_count_date') || '';
 }
 document.getElementById('countSessionInput').addEventListener('input', () => {
   localStorage.setItem('boxqr_count_session', document.getElementById('countSessionInput').value.trim());
   loadCountedList();
 });
+document.getElementById('countDateInput').addEventListener('input', () => {
+  localStorage.setItem('boxqr_count_date', document.getElementById('countDateInput').value.trim());
+});
 document.getElementById('genSessionBtn').addEventListener('click', () => {
   const id = genSessionId();
   document.getElementById('countSessionInput').value = id;
   localStorage.setItem('boxqr_count_session', id);
+  if(!document.getElementById('countDateInput').value.trim()){
+    const d = new Date();
+    const todayStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()+543}`;
+    document.getElementById('countDateInput').value = todayStr;
+    localStorage.setItem('boxqr_count_date', todayStr);
+  }
   loadCountedList();
 });
 loadSessionId();
@@ -630,6 +661,7 @@ async function loadCountedList(){
 
 async function performCountScan(boxId){
   const sessionId = document.getElementById('countSessionInput').value.trim();
+  const countDate = document.getElementById('countDateInput').value.trim();
   const resultArea = document.getElementById('stockScanResultArea');
   if(!sessionId){
     resultArea.innerHTML = '<div class="status err" style="margin-top:14px;">กรุณาตั้งรหัสรอบนับก่อนเริ่มยิง</div>';
@@ -637,7 +669,7 @@ async function performCountScan(boxId){
   }
   resultArea.innerHTML = '<div class="status">กำลังบันทึก...</div>';
   try{
-    const result = await callBackend({ action:'scanCount', sessionId, boxId });
+    const result = await callBackend({ action:'scanCount', sessionId, boxId, countDate });
     if(result.duplicate){
       resultArea.innerHTML = `<div class="status err" style="margin-top:14px;">กล่อง ${boxId} ถูกนับไปแล้วเมื่อ ${result.scannedAt} ในรอบนี้ — ไม่บันทึกซ้ำ</div>`;
     } else if(!result.found){
@@ -665,6 +697,83 @@ stockScanInput.addEventListener('keydown', (e) => {
   stockScanInput.value = '';
   performCountScan(boxId);
 });
+
+// ---------- in-app camera scanner (no need to switch to LINE) ----------
+let camStream = null;
+let camLoopId = null;
+let lastCamCode = '';
+let lastCamTime = 0;
+
+function extractBoxIdFromText(text){
+  try{
+    const u = new URL(text);
+    const fromParam = u.searchParams.get('box');
+    if(fromParam) return fromParam;
+  }catch(e){ /* not a URL, treat as raw box id */ }
+  return text.trim();
+}
+
+async function startCamera(){
+  const video = document.getElementById('camVideo');
+  const wrap = document.getElementById('camWrap');
+  const statusEl = document.getElementById('camStatus');
+  try{
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = camStream;
+    await video.play();
+    wrap.classList.add('show');
+    document.getElementById('camStartBtn').style.display = 'none';
+    document.getElementById('camStopBtn').style.display = 'inline-block';
+    camScanLoop();
+  }catch(e){
+    document.getElementById('stockScanResultArea').innerHTML =
+      '<div class="status err" style="margin-top:14px;">เปิดกล้องไม่สำเร็จ: ' + e.message + ' (ต้องอนุญาตสิทธิ์กล้อง และเปิดผ่าน https)</div>';
+  }
+}
+
+function stopCamera(){
+  if(camLoopId) cancelAnimationFrame(camLoopId);
+  if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  document.getElementById('camWrap').classList.remove('show');
+  document.getElementById('camStartBtn').style.display = 'inline-block';
+  document.getElementById('camStopBtn').style.display = 'none';
+}
+
+function camScanLoop(){
+  const video = document.getElementById('camVideo');
+  const canvas = document.getElementById('camCanvas');
+  const statusEl = document.getElementById('camStatus');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  function tick(){
+    if(!camStream) return;
+    if(video.readyState === video.HAVE_ENOUGH_DATA){
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, canvas.width, canvas.height);
+      if(code && code.data){
+        const now = Date.now();
+        if(code.data !== lastCamCode || now - lastCamTime > 2500){
+          lastCamCode = code.data;
+          lastCamTime = now;
+          const boxId = extractBoxIdFromText(code.data);
+          statusEl.textContent = 'จับได้: ' + boxId + ' — กำลังบันทึก...';
+          if(navigator.vibrate) navigator.vibrate(80);
+          performCountScan(boxId).then(() => {
+            statusEl.textContent = 'เล็งกล้องไปที่ QR กล่องถัดไป';
+          });
+        }
+      }
+    }
+    camLoopId = requestAnimationFrame(tick);
+  }
+  camLoopId = requestAnimationFrame(tick);
+}
+
+document.getElementById('camStartBtn').addEventListener('click', startCamera);
+document.getElementById('camStopBtn').addEventListener('click', stopCamera);
 
 // ---------- history (click a box -> shows items + QR right away, no tab switch) ----------
 async function loadHistory(){
@@ -733,6 +842,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if(btn.dataset.tab === 'history') loadHistory();
     if(btn.dataset.tab === 'scan') scanInput.focus();
     if(btn.dataset.tab === 'stockcount'){ loadCountedList(); stockScanInput.focus(); }
+    else { stopCamera(); }
   });
 });
 
