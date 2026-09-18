@@ -182,7 +182,7 @@
   <div class="panel" id="panel-stockcount">
     <div class="trip-bar">
       <div class="hint" style="margin-top:0; margin-bottom:8px; font-weight:600;">รอบนับสต็อค (ตั้งครั้งเดียวต่อรอบ กันยิงกล่องซ้ำในรอบเดียวกัน)</div>
-      <div class="hint" style="margin-top:0; margin-bottom:8px;">ตอนนี้เปิดค้างอยู่ที่เมนูนี้ — ถ้ายิง QR จาก LINE ตอนนี้จะถือว่านับเข้ารอบเลย (ไม่ใช่แค่ดูรายละเอียด) ถ้าจะแค่เช็คของเฉยๆ ไม่ต้องเปิดแอพเข้าเมนูนี้ก่อนยิง</div>
+      <div class="hint" style="margin-top:0; margin-bottom:8px;">การนับสต็อคทำได้เฉพาะตอนเปิดแอพเข้ามาที่เมนูนี้เอง (กดปุ่มกล้อง หรือยิงด้วย handheld ในช่องด้านล่าง) ยิง QR จาก LINE จะไม่นับให้ไม่ว่ากรณีใด</div>
       <div class="field-row" style="margin-bottom:0;">
         <div style="flex:1;">
           <label>รหัสรอบนับ</label>
@@ -194,11 +194,6 @@
         </div>
         <button class="btn btn-ghost" id="genSessionBtn">เริ่มรอบใหม่</button>
       </div>
-    </div>
-
-    <div class="summary-bar" id="stockSummaryBar">
-      <div class="summary-item"><span class="num" id="summaryBoxCount">0</span><span class="lbl">กล่องที่นับแล้ว</span></div>
-      <div class="summary-item"><span class="num" id="summaryQtyTotal">0</span><span class="lbl">รวมจำนวนสินค้า (คู่)</span></div>
     </div>
 
     <div class="btn-row" style="margin-top:0;">
@@ -217,7 +212,11 @@
     <div class="hint">กล่องเดียวกันยิงซ้ำในรอบนี้จะไม่บันทึกซ้ำใน Google Sheet</div>
     <div id="stockScanResultArea"></div>
     <div style="margin-top:20px;">
-      <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">รายการกล่องที่นับแล้วในรอบนี้</div>
+      <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">สรุปยอดรวมทั้งรอบ (ทุกกล่องที่นับแล้ว แยกตามสี × เบอร์)</div>
+      <div class="table-scroll" id="stockColorSizeSummary"><div class="empty">ยังไม่มีข้อมูลสรุป</div></div>
+    </div>
+    <div style="margin-top:20px;">
+      <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">รายการกล่องที่นับแล้วในรอบนี้ (แยกตามกล่อง)</div>
       <div id="stockCountedList"><div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div></div>
     </div>
   </div>
@@ -609,31 +608,64 @@ document.getElementById('genSessionBtn').addEventListener('click', () => {
 });
 loadSessionId();
 
-function updateSummaryBar(summary){
-  document.getElementById('summaryBoxCount').textContent = summary ? summary.totalBoxes : 0;
-  document.getElementById('summaryQtyTotal').textContent = summary ? summary.totalQty : 0;
+function renderColorSizeSummary(rows){
+  const container = document.getElementById('stockColorSizeSummary');
+  const totals = {}; // color -> { size: qty }
+  const colorOrder = [];
+  rows.forEach(r => {
+    r.items.forEach(it => {
+      if(!totals[it.color]){ totals[it.color] = {}; colorOrder.push(it.color); }
+      totals[it.color][it.size] = (totals[it.color][it.size] || 0) + Number(it.qty);
+    });
+  });
+  if(colorOrder.length === 0){ container.innerHTML = '<div class="empty">ยังไม่มีข้อมูลสรุป</div>'; return; }
+
+  let head = '<thead><tr><th class="colhead-color">สี</th>' + SIZES.map(s=>`<th>${s}</th>`).join('') + '<th>รวม</th></tr></thead>';
+  let grandTotals = SIZES.map(() => 0);
+  let grandAll = 0;
+  let body = colorOrder.map(color => {
+    let rowTotal = 0;
+    const cells = SIZES.map((s, i) => {
+      const q = totals[color][s] || 0;
+      grandTotals[i] += q;
+      rowTotal += q;
+      return `<td>${q || ''}</td>`;
+    }).join('');
+    grandAll += rowTotal;
+    return `<tr><td class="color-cell">${color}</td>${cells}<td class="row-total">${rowTotal}</td></tr>`;
+  }).join('');
+  body += `<tr><td class="color-cell">รวมทั้งหมด</td>${grandTotals.map(q=>`<td class="row-total">${q}</td>`).join('')}<td class="row-total">${grandAll}</td></tr>`;
+
+  container.innerHTML = `<table><tbody></tbody></table>`;
+  container.querySelector('table').innerHTML = head + '<tbody>' + body + '</tbody>';
 }
 
 async function loadCountedList(){
   const sessionId = document.getElementById('countSessionInput').value.trim();
-  const container = document.getElementById('stockCountedList');
-  if(!sessionId){ container.innerHTML = '<div class="empty">ยังไม่ได้ตั้งรหัสรอบนับ</div>'; updateSummaryBar(null); return; }
+  const listContainer = document.getElementById('stockCountedList');
+  const summaryContainer = document.getElementById('stockColorSizeSummary');
+  if(!sessionId){
+    listContainer.innerHTML = '<div class="empty">ยังไม่ได้ตั้งรหัสรอบนับ</div>';
+    summaryContainer.innerHTML = '<div class="empty">ยังไม่มีข้อมูลสรุป</div>';
+    return;
+  }
   try{
     const result = await callBackend({ action:'countList', sessionId });
-    updateSummaryBar(result.summary);
     const rows = result.rows || [];
-    if(rows.length === 0){ container.innerHTML = '<div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div>'; return; }
-    const ul = document.createElement('ul');
-    ul.className = 'history-list';
-    rows.forEach(r => {
-      const li = document.createElement('li');
-      li.innerHTML = `<span>${r.boxId} — ${r.qty} คู่</span><span class="pill">${r.scannedAt}</span>`;
-      ul.appendChild(li);
-    });
-    container.innerHTML = '';
-    container.appendChild(ul);
+    renderColorSizeSummary(rows);
+    if(rows.length === 0){ listContainer.innerHTML = '<div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div>'; return; }
+    listContainer.innerHTML = rows.map(r => `
+      <div class="result-card" style="margin-top:10px; padding:12px 16px;">
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="id-box">${r.boxId}</span>
+            <span class="hint" style="margin-top:0;">${r.scannedAt}</span>
+          </div>
+          ${itemsTableHtml(r.items)}
+        </div>
+      </div>`).join('');
   }catch(e){
-    container.innerHTML = '<div class="empty">โหลดรายการไม่สำเร็จ</div>';
+    listContainer.innerHTML = '<div class="empty">โหลดรายการไม่สำเร็จ</div>';
   }
 }
 
@@ -660,7 +692,6 @@ async function performCountScan(boxId){
             ${itemsTableHtml(result.items)}
           </div>
         </div>`;
-      updateSummaryBar(result.summary);
       loadCountedList();
     }
   }catch(e){
@@ -814,7 +845,6 @@ document.getElementById('historyModalCloseBtn').addEventListener('click', () => 
 function activateTab(tabName){
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tabName));
-  localStorage.setItem('boxqr_last_tab', tabName);
   if(tabName === 'history') loadHistory();
   if(tabName === 'scan') scanInput.focus();
   if(tabName === 'stockcount'){ loadCountedList(); stockScanInput.focus(); }
@@ -831,21 +861,14 @@ if('serviceWorker' in navigator){
 }
 
 // ---------- open straight to a box's details when scanned via LINE/camera ----------
-// ถ้าเปิดแอพค้างไว้ที่เมนู "นับสต็อค" ก่อนยิง ให้ถือเป็นการนับ ไม่ใช่แค่ดูรายละเอียด
+// ยิงจาก LINE ไม่ว่ากรณีใดจะแค่โชว์รายละเอียด — การนับสต็อคทำได้เฉพาะเปิดแอพเข้าเมนูนับสต็อคเองเท่านั้น
 (function autoOpenFromUrl(){
   const params = new URLSearchParams(location.search);
   const boxId = params.get('box');
   if(!boxId) return;
-  const lastTab = localStorage.getItem('boxqr_last_tab');
-  const sessionId = localStorage.getItem('boxqr_count_session') || '';
-  if(lastTab === 'stockcount' && sessionId){
-    activateTab('stockcount');
-    performCountScan(boxId);
-  } else {
-    activateTab('scan');
-    scanInput.value = boxId;
-    lookupBox(boxId, document.getElementById('scanResultArea'));
-  }
+  activateTab('scan');
+  scanInput.value = boxId;
+  lookupBox(boxId, document.getElementById('scanResultArea'));
 })();
 </script>
 </body>
