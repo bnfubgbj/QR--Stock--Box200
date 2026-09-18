@@ -82,9 +82,10 @@
   .modal-box{background:#fff; border-radius:12px; padding:22px; max-width:520px; width:100%; max-height:85vh; overflow:auto;}
   .modal-box h3{margin:0 0 12px; font-size:1.05rem;}
   .file-hidden{display:none;}
-  .label-block{text-align:center; padding:6mm 4mm; font-family:sans-serif; page-break-after:always;}
+  .label-block{text-align:center; padding:1.5mm; font-family:sans-serif; page-break-after:always; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box;}
   .label-block:last-child{page-break-after:auto;}
-  .label-block .lbl-id{font-family:var(--mono); font-weight:700; margin-top:2mm;}
+  .label-block .lbl-id{font-family:var(--mono); font-weight:700; margin-top:1mm; line-height:1;}
+  .label-block svg, .label-block canvas, .label-block img{display:block;}
   @media print{
     body *{visibility:hidden;}
     #printArea, #printArea *{visibility:visible;}
@@ -414,21 +415,24 @@ function applyLabelPageSize(){
   const key = getLabelSizeKey();
   const sz = LABEL_SIZES[key] || LABEL_SIZES['50x30'];
   document.getElementById('labelPageStyle').textContent =
-    key === 'a4' ? `@page{ size:A4; margin:12mm; }` : `@page{ size:${sz.w}mm ${sz.h}mm; margin:2mm; }`;
+    key === 'a4' ? `@page{ size:A4; margin:12mm; }` : `@page{ size:${sz.w}mm ${sz.h}mm; margin:0mm; }`;
   return sz;
 }
 
 // วาด QR หนึ่งดวงลงในบล็อกป้าย แล้ว return element ที่สร้าง ใช้ได้ทั้งพิมพ์ทีละใบและหลายใบพร้อมกัน
-function buildLabelBlock(boxId, qrSizePx){
+function buildLabelBlock(boxId, sz){
   const wrap = document.createElement('div');
   wrap.className = 'label-block';
+  wrap.style.width = sz.w + 'mm';
+  wrap.style.height = sz.h + 'mm';
   const qrHolder = document.createElement('div');
   wrap.appendChild(qrHolder);
   const idEl = document.createElement('div');
   idEl.className = 'lbl-id';
+  idEl.style.fontSize = Math.max(8, Math.round(sz.h * 0.9)) + 'px';
   idEl.textContent = boxId;
   wrap.appendChild(idEl);
-  new QRCode(qrHolder, { text: boxUrl(boxId), width: qrSizePx, height: qrSizePx, colorDark:'#1c232b', colorLight:'#ffffff' });
+  new QRCode(qrHolder, { text: boxUrl(boxId), width: sz.qr, height: sz.qr, colorDark:'#1c232b', colorLight:'#ffffff' });
   return wrap;
 }
 
@@ -436,7 +440,7 @@ function printLabels(boxIds){
   const sz = applyLabelPageSize();
   const area = document.getElementById('printArea');
   area.innerHTML = '';
-  boxIds.forEach(boxId => area.appendChild(buildLabelBlock(boxId, sz.qr)));
+  boxIds.forEach(boxId => area.appendChild(buildLabelBlock(boxId, sz)));
   window.print();
 }
 
