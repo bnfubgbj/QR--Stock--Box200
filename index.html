@@ -234,19 +234,16 @@ const SIZES = ['8','8.5','9','9.5','10','10.5','11'];
 let colorRows = [{name:'ขาว'}, {name:'ดำ'}];
 
 // ---------- backend config ----------
-function getScriptUrl(){ return localStorage.getItem('boxqr_script_url') || ''; }
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby60u7VZFgZemkt-j94tb0S7j8kW7OcXXY-Hpk7_JP5Rx___qkMp3IJyZGehhM9vBOz/exec';
+function getScriptUrl(){ return localStorage.getItem('boxqr_script_url') || DEFAULT_SCRIPT_URL; }
 function refreshSettingsBar(){
   const bar = document.getElementById('settingsBar');
   const status = document.getElementById('settingsStatus');
   const url = getScriptUrl();
-  document.getElementById('scriptUrlInput').value = url;
-  if(url){
-    bar.classList.add('ok');
-    status.textContent = 'เชื่อมกับ Google Sheet แล้ว: ' + url;
-  } else {
-    bar.classList.remove('ok');
-    status.textContent = 'ยังไม่ได้ตั้งค่า Apps Script URL — ใส่ลิงก์ที่ได้จากการ Deploy ด้านล่างก่อนใช้งาน';
-  }
+  document.getElementById('scriptUrlInput').value = localStorage.getItem('boxqr_script_url') || '';
+  document.getElementById('scriptUrlInput').placeholder = 'ใช้ค่าเริ่มต้นอยู่ — ใส่ตรงนี้เฉพาะถ้าต้องการเปลี่ยนไปคนละ Google Sheet';
+  bar.classList.add('ok');
+  status.textContent = 'เชื่อมกับ Google Sheet แล้ว (ใช้ได้ทุกเครื่อง ไม่ต้องตั้งค่า)';
 }
 document.getElementById('saveUrlBtn').addEventListener('click', () => {
   const val = document.getElementById('scriptUrlInput').value.trim();
