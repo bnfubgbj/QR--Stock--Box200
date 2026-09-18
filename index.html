@@ -183,6 +183,7 @@
   <div class="panel" id="panel-stockcount">
     <div class="trip-bar">
       <div class="hint" style="margin-top:0; margin-bottom:8px; font-weight:600;">รอบนับสต็อค (ตั้งครั้งเดียวต่อรอบ กันยิงกล่องซ้ำในรอบเดียวกัน)</div>
+      <div class="hint" style="margin-top:0; margin-bottom:8px;">ตอนนี้เปิดค้างอยู่ที่เมนูนี้ — ถ้ายิง QR จาก LINE ตอนนี้จะถือว่านับเข้ารอบเลย (ไม่ใช่แค่ดูรายละเอียด) ถ้าจะแค่ดูของ ให้ไปเปิดค้างที่แท็บ "2. ยิงสแกน" แทนก่อนยิง</div>
       <div class="field-row" style="margin-bottom:0;">
         <div style="flex:1;">
           <label>รหัสรอบนับ</label>
@@ -817,6 +818,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    localStorage.setItem('boxqr_last_tab', btn.dataset.tab);
     if(btn.dataset.tab === 'history') loadHistory();
     if(btn.dataset.tab === 'scan') scanInput.focus();
     if(btn.dataset.tab === 'stockcount'){ loadCountedList(); stockScanInput.focus(); }
@@ -831,13 +833,21 @@ if('serviceWorker' in navigator){
 }
 
 // ---------- open straight to a box's details when scanned via LINE/camera ----------
+// ถ้าเปิดแอพค้างไว้ที่เมนู "นับสต็อค" ก่อนยิง ให้ถือเป็นการนับ ไม่ใช่แค่ดูรายละเอียด
 (function autoOpenFromUrl(){
   const params = new URLSearchParams(location.search);
   const boxId = params.get('box');
   if(!boxId) return;
-  document.querySelector('[data-tab="scan"]').click();
-  scanInput.value = boxId;
-  lookupBox(boxId, document.getElementById('scanResultArea'));
+  const lastTab = localStorage.getItem('boxqr_last_tab');
+  const sessionId = localStorage.getItem('boxqr_count_session') || '';
+  if(lastTab === 'stockcount' && sessionId){
+    document.querySelector('[data-tab="stockcount"]').click();
+    performCountScan(boxId);
+  } else {
+    document.querySelector('[data-tab="scan"]').click();
+    scanInput.value = boxId;
+    lookupBox(boxId, document.getElementById('scanResultArea'));
+  }
 })();
 </script>
 </body>
