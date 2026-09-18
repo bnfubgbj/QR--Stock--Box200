@@ -831,8 +831,16 @@ async function openHistoryDetail(boxId){
           ${tripParts.length ? `<div class="hint" style="margin-top:0;">${tripParts.join(' · ')}</div>` : ''}
           ${itemsTableHtml(result.items)}
         </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="historyReprintBtn">พิมพ์ป้ายซ้ำ</button>
       </div>`;
     drawQr('historyQr', boxUrl(result.boxId));
+    document.getElementById('historyReprintBtn').addEventListener('click', () => {
+      document.getElementById('printId').textContent = result.boxId;
+      drawQr('printQr', boxUrl(result.boxId));
+      window.print();
+    });
   }catch(e){
     body.innerHTML = `<div class="status err">โหลดข้อมูลกล่อง "${boxId}" ไม่สำเร็จ</div>`;
   }
