@@ -65,6 +65,7 @@
   .blank-cell{height:34px; border:1px solid var(--steel-200);}
   .settings-bar{background:#fff8ec; border:1px solid #f0d9ad; border-radius:8px; padding:12px 14px; margin-bottom:16px; font-size:.85rem;}
   .settings-bar.ok{background:#eef7f1; border-color:#bfe0cc;}
+  .trip-bar{background:var(--steel-100); border:1px solid var(--steel-200); border-radius:8px; padding:12px 14px; margin-bottom:16px;}
   .modal-overlay{position:fixed; inset:0; background:rgba(28,35,43,.5); display:none; align-items:center; justify-content:center; z-index:1000; padding:16px;}
   .modal-overlay.show{display:flex;}
   .modal-box{background:#fff; border-radius:12px; padding:22px; max-width:520px; width:100%; max-height:85vh; overflow:auto;}
@@ -104,6 +105,24 @@
 
   <!-- PACK PANEL -->
   <div class="panel active" id="panel-pack">
+    <div class="trip-bar">
+      <div class="hint" style="margin-top:0; margin-bottom:8px; font-weight:600;">ข้อมูลเที่ยวรับของ (กรอกครั้งเดียว ระบบจำไว้ใส่ให้ทุกกล่องในเที่ยวนี้)</div>
+      <div class="field-row" style="margin-bottom:0;">
+        <div style="flex:1; min-width:120px;">
+          <label>เที่ยวที่</label>
+          <input type="text" id="tripNoInput" placeholder="เช่น 4">
+        </div>
+        <div style="flex:1; min-width:140px;">
+          <label>วันที่รับของ</label>
+          <input type="text" id="receiptDateInput" placeholder="เช่น 8/9/69">
+        </div>
+        <div style="flex:1; min-width:160px;">
+          <label>เลขบาร์โค้ดใบรับของ รง.</label>
+          <input type="text" id="factoryBarcodeInput" placeholder="เช่น VV-6906-8695">
+        </div>
+      </div>
+    </div>
+
     <div class="field-row">
       <div style="flex:1">
         <label>รหัสกล่อง (เว้นว่างไว้ให้ระบบสร้างให้)</label>
@@ -169,6 +188,7 @@
   <div class="modal-box">
     <h3>ตรวจสอบข้อมูลก่อนบันทึก</h3>
     <div class="id-box" id="confirmBoxId"></div>
+    <div class="hint" id="confirmTripInfo" style="margin-bottom:6px;"></div>
     <table style="margin-top:12px;"><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน</th></tr></thead><tbody id="confirmBody"></tbody></table>
     <div class="total-line" id="confirmTotal"></div>
     <div class="btn-row">
@@ -211,6 +231,28 @@ document.getElementById('saveUrlBtn').addEventListener('click', () => {
   refreshSettingsBar();
 });
 refreshSettingsBar();
+
+// ---------- trip info (persists across boxes) ----------
+function loadTripInfo(){
+  document.getElementById('tripNoInput').value = localStorage.getItem('boxqr_trip_no') || '';
+  document.getElementById('receiptDateInput').value = localStorage.getItem('boxqr_receipt_date') || '';
+  document.getElementById('factoryBarcodeInput').value = localStorage.getItem('boxqr_factory_barcode') || '';
+}
+function getTripInfo(){
+  return {
+    tripNo: document.getElementById('tripNoInput').value.trim(),
+    receiptDate: document.getElementById('receiptDateInput').value.trim(),
+    factoryBarcode: document.getElementById('factoryBarcodeInput').value.trim()
+  };
+}
+['tripNoInput','receiptDateInput','factoryBarcodeInput'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    localStorage.setItem('boxqr_trip_no', document.getElementById('tripNoInput').value.trim());
+    localStorage.setItem('boxqr_receipt_date', document.getElementById('receiptDateInput').value.trim());
+    localStorage.setItem('boxqr_factory_barcode', document.getElementById('factoryBarcodeInput').value.trim());
+  });
+});
+loadTripInfo();
 
 async function callBackend(payload){
   const url = getScriptUrl();
@@ -307,6 +349,12 @@ document.getElementById('reviewBoxBtn').addEventListener('click', () => {
   statusEl.textContent = '';
 
   document.getElementById('confirmBoxId').textContent = boxId;
+  const trip = getTripInfo();
+  const tripParts = [];
+  if(trip.tripNo) tripParts.push('เที่ยว ' + trip.tripNo);
+  if(trip.receiptDate) tripParts.push('วันที่ ' + trip.receiptDate);
+  if(trip.factoryBarcode) tripParts.push('ใบรับของ ' + trip.factoryBarcode);
+  document.getElementById('confirmTripInfo').textContent = tripParts.join(' · ');
   const tbody = document.getElementById('confirmBody');
   tbody.innerHTML = '';
   let total = 0;
@@ -329,11 +377,12 @@ document.getElementById('confirmSaveBtn').addEventListener('click', async () => 
   const statusEl = document.getElementById('packStatus');
   const boxId = document.getElementById('confirmModal').dataset.boxid;
   const items = collectItemsFromGrid();
+  const trip = getTripInfo();
 
   statusEl.textContent = 'กำลังบันทึก...';
   statusEl.className = 'status';
   try{
-    const result = await callBackend({ action:'save', boxId, items });
+    const result = await callBackend({ action:'save', boxId, items, tripNo: trip.tripNo, receiptDate: trip.receiptDate, factoryBarcode: trip.factoryBarcode });
     if(!result.ok) throw new Error('บันทึกไม่สำเร็จ');
     document.getElementById('confirmModal').classList.remove('show');
     statusEl.textContent = `บันทึกกล่อง ${boxId} เรียบร้อย`;
@@ -446,10 +495,15 @@ async function lookupBox(boxId, container){
     if(!result.found) throw new Error('not found');
     const total = result.items.reduce((s,it) => s + Number(it.qty), 0);
     let rows = result.items.map(it => `<tr><td>${it.color}</td><td>${it.size}</td><td>${it.qty}</td></tr>`).join('');
+    const tripParts = [];
+    if(result.tripNo) tripParts.push('เที่ยว ' + result.tripNo);
+    if(result.receiptDate) tripParts.push('วันที่รับ ' + result.receiptDate);
+    if(result.factoryBarcode) tripParts.push('ใบรับของ ' + result.factoryBarcode);
     container.innerHTML = `
       <div class="result-card" style="margin-top:16px;">
         <div style="flex:1;">
           <div class="id-box">${result.boxId}</div>
+          ${tripParts.length ? `<div class="hint" style="margin-top:6px;">${tripParts.join(' · ')}</div>` : ''}
           <table style="margin-top:10px;"><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน</th></tr></thead><tbody>${rows}</tbody></table>
           <div class="total-line">รวมทั้งหมด: ${total} คู่</div>
         </div>
