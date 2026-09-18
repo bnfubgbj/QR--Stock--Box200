@@ -439,6 +439,8 @@ function printLabels(boxIds){
   boxIds.forEach(boxId => area.appendChild(buildLabelBlock(boxId, sz.qr)));
   window.print();
 }
+
+function drawQr(elementId, text){
   const el = document.getElementById(elementId);
   el.innerHTML = '';
   new QRCode(el, { text, width:160, height:160, colorDark:'#1c232b', colorLight:'#ffffff' });
