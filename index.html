@@ -100,6 +100,7 @@
     <button class="tab-btn active" data-tab="pack">1. รับของเข้า / สร้าง QR</button>
     <button class="tab-btn" data-tab="scan">2. ยิงสแกน / ตรวจสอบ</button>
     <button class="tab-btn" data-tab="count">3. พิมพ์ใบนับสต็อค</button>
+    <button class="tab-btn" data-tab="stockscan">4. นับสต็อค (ยิงในแอพ)</button>
     <button class="tab-btn" data-tab="history">ประวัติกล่อง</button>
   </div>
 
@@ -150,7 +151,7 @@
       <div class="qr-block">
         <div id="qrcode"></div>
         <div class="id-box" id="resultIdBox" style="margin-top:8px;"></div>
-        <div class="hint">ป้ายนี้มีแค่รหัส ไม่มีจำนวน</div>
+        <div class="hint">QR นี้ยิงจากมือถือ/LINE แล้วเปิดดูรายละเอียดกล่องได้ทันที</div>
       </div>
       <div style="flex:1; min-width:220px;">
         <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">เนื้อหาในกล่องนี้ (เก็บใน Google Sheet)</div>
@@ -175,6 +176,28 @@
     <div class="hint" style="margin-bottom:14px;">ใบนี้จะไม่โชว์ตัวเลขที่บันทึกไว้เลย มีแค่ช่องว่างให้เขียนจำนวนที่นับได้จริง</div>
     <div id="countPreview"></div>
     <button class="btn btn-primary" id="printCountBtn" style="margin-top:14px; display:none;">พิมพ์ใบนับสต็อค (เปล่า)</button>
+  </div>
+
+  <!-- STOCK SCAN COUNT PANEL -->
+  <div class="panel" id="panel-stockscan">
+    <div class="trip-bar">
+      <div class="hint" style="margin-top:0; margin-bottom:8px; font-weight:600;">รอบนับสต็อค (ตั้งครั้งเดียวต่อรอบ กันยิงกล่องซ้ำในรอบเดียวกัน)</div>
+      <div class="field-row" style="margin-bottom:0;">
+        <div style="flex:1;">
+          <label>รหัสรอบนับ</label>
+          <input type="text" id="countSessionInput" placeholder="เช่น CNT-0918">
+        </div>
+        <button class="btn btn-ghost" id="genSessionBtn">เริ่มรอบใหม่</button>
+      </div>
+    </div>
+    <label>ยิง QR ที่กล่อง เพื่อบันทึกว่านับแล้ว</label>
+    <input type="text" id="stockScanInput" placeholder="รอรับข้อมูลจากเครื่องสแกน...">
+    <div class="hint">กล่องเดียวกันยิงซ้ำในรอบนี้จะไม่บันทึกซ้ำใน Google Sheet</div>
+    <div id="stockScanResultArea"></div>
+    <div style="margin-top:20px;">
+      <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">กล่องที่นับแล้วในรอบนี้</div>
+      <div id="stockCountedList"><div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div></div>
+    </div>
   </div>
 
   <!-- HISTORY PANEL -->
@@ -328,6 +351,9 @@ function collectItemsFromGrid(){
   return items;
 }
 
+const APP_BASE_URL = location.origin + location.pathname;
+function boxUrl(boxId){ return APP_BASE_URL + '?box=' + encodeURIComponent(boxId); }
+
 function drawQr(elementId, text){
   const el = document.getElementById(elementId);
   el.innerHTML = '';
@@ -401,7 +427,7 @@ document.getElementById('confirmSaveBtn').addEventListener('click', async () => 
     document.getElementById('resultIdBox').textContent = boxId;
     document.getElementById('resultCard').style.display = 'flex';
     document.getElementById('printBtn').style.display = 'inline-block';
-    drawQr('qrcode', boxId);
+    drawQr('qrcode', boxUrl(boxId));
     loadHistory();
     loadCountSelect();
   }catch(e){
@@ -415,7 +441,7 @@ document.getElementById('printBtn').addEventListener('click', () => {
   document.getElementById('printCountArea').innerHTML = '';
   const boxId = document.getElementById('resultIdBox').textContent;
   document.getElementById('printId').textContent = boxId;
-  drawQr('printQr', boxId);
+  drawQr('printQr', boxUrl(boxId));
   window.print();
 });
 
@@ -594,6 +620,86 @@ async function loadHistory(){
   }
 }
 
+// ---------- stock count (scan-in-app) ----------
+function genSessionId(){
+  const d = new Date();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `CNT-${mm}${dd}`;
+}
+function loadSessionId(){
+  const saved = localStorage.getItem('boxqr_count_session') || '';
+  document.getElementById('countSessionInput').value = saved;
+}
+document.getElementById('countSessionInput').addEventListener('input', () => {
+  localStorage.setItem('boxqr_count_session', document.getElementById('countSessionInput').value.trim());
+});
+document.getElementById('genSessionBtn').addEventListener('click', () => {
+  const id = genSessionId();
+  document.getElementById('countSessionInput').value = id;
+  localStorage.setItem('boxqr_count_session', id);
+  loadCountedList();
+});
+loadSessionId();
+
+async function loadCountedList(){
+  const sessionId = document.getElementById('countSessionInput').value.trim();
+  const container = document.getElementById('stockCountedList');
+  if(!sessionId){ container.innerHTML = '<div class="empty">ยังไม่ได้ตั้งรหัสรอบนับ</div>'; return; }
+  try{
+    const result = await callBackend({ action:'countList', sessionId });
+    const rows = result.rows || [];
+    if(rows.length === 0){ container.innerHTML = '<div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div>'; return; }
+    const ul = document.createElement('ul');
+    ul.className = 'history-list';
+    rows.forEach(r => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${r.boxId}</span><span class="pill">${r.scannedAt}</span>`;
+      ul.appendChild(li);
+    });
+    container.innerHTML = '';
+    container.appendChild(ul);
+  }catch(e){
+    container.innerHTML = '<div class="empty">โหลดรายการไม่สำเร็จ</div>';
+  }
+}
+
+const stockScanInput = document.getElementById('stockScanInput');
+stockScanInput.addEventListener('keydown', async (e) => {
+  if(e.key !== 'Enter' || !stockScanInput.value.trim()) return;
+  const boxId = stockScanInput.value.trim();
+  const sessionId = document.getElementById('countSessionInput').value.trim();
+  const resultArea = document.getElementById('stockScanResultArea');
+  stockScanInput.value = '';
+  if(!sessionId){
+    resultArea.innerHTML = '<div class="status err" style="margin-top:14px;">กรุณาตั้งรหัสรอบนับก่อนเริ่มยิง</div>';
+    return;
+  }
+  resultArea.innerHTML = '<div class="status">กำลังบันทึก...</div>';
+  try{
+    const result = await callBackend({ action:'scanCount', sessionId, boxId });
+    if(result.duplicate){
+      resultArea.innerHTML = `<div class="status err" style="margin-top:14px;">กล่อง ${boxId} ถูกนับไปแล้วเมื่อ ${result.scannedAt} ในรอบนี้ — ไม่บันทึกซ้ำ</div>`;
+    } else if(!result.found){
+      resultArea.innerHTML = `<div class="status err" style="margin-top:14px;">ไม่พบข้อมูลกล่องรหัส "${boxId}" ในระบบ</div>`;
+    } else {
+      const total = result.items.reduce((s,it) => s + Number(it.qty), 0);
+      let rows = result.items.map(it => `<tr><td>${it.color}</td><td>${it.size}</td><td>${it.qty}</td></tr>`).join('');
+      resultArea.innerHTML = `
+        <div class="result-card" style="margin-top:16px;">
+          <div style="flex:1;">
+            <div class="status ok" style="margin-top:0;">นับกล่อง ${boxId} เรียบร้อย บันทึกลง Google Sheet แล้ว</div>
+            <table style="margin-top:10px;"><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน</th></tr></thead><tbody>${rows}</tbody></table>
+            <div class="total-line">รวมทั้งหมด: ${total} คู่</div>
+          </div>
+        </div>`;
+      loadCountedList();
+    }
+  }catch(e){
+    resultArea.innerHTML = `<div class="status err" style="margin-top:14px;">เชื่อมต่อไม่สำเร็จ: ${e.message}</div>`;
+  }
+});
+
 // ---------- tabs ----------
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -604,6 +710,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if(btn.dataset.tab === 'history') loadHistory();
     if(btn.dataset.tab === 'scan') scanInput.focus();
     if(btn.dataset.tab === 'count') loadCountSelect();
+    if(btn.dataset.tab === 'stockscan'){ loadCountedList(); stockScanInput.focus(); }
   });
 });
 
@@ -612,6 +719,16 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   });
 }
+
+// ---------- open straight to a box's details when scanned via LINE/camera ----------
+(function autoOpenFromUrl(){
+  const params = new URLSearchParams(location.search);
+  const boxId = params.get('box');
+  if(!boxId) return;
+  document.querySelector('[data-tab="scan"]').click();
+  scanInput.value = boxId;
+  lookupBox(boxId, document.getElementById('scanResultArea'));
+})();
 </script>
 </body>
 </html>
