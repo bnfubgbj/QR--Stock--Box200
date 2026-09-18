@@ -184,6 +184,11 @@
         </div>
         <button class="btn btn-ghost" id="genSessionBtn">เริ่มรอบใหม่</button>
       </div>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:12px; margin-bottom:0; cursor:pointer;">
+        <input type="checkbox" id="countingModeToggle" style="width:auto;">
+        <span style="font-size:.85rem; font-weight:600;">เปิดโหมดยิงนับผ่านมือถือ/LINE — ยิง QR แล้วนับอัตโนมัติทันที ไม่ต้องพิมพ์เอง</span>
+      </label>
+      <div class="hint" id="countingModeHint" style="margin-top:4px;"></div>
     </div>
 
     <div class="summary-bar" id="stockSummaryBar">
@@ -578,6 +583,23 @@ document.getElementById('genSessionBtn').addEventListener('click', () => {
 });
 loadSessionId();
 
+function refreshCountingModeHint(){
+  const on = document.getElementById('countingModeToggle').checked;
+  const hint = document.getElementById('countingModeHint');
+  const sessionId = document.getElementById('countSessionInput').value.trim();
+  if(!on){ hint.textContent = 'ปิดอยู่ — ยิง QR จากมือถือจะแค่โชว์รายละเอียด ไม่นับ'; return; }
+  hint.textContent = sessionId
+    ? `เปิดอยู่ — ยิง QR จากมือถือตอนนี้จะนับเข้ารอบ "${sessionId}" ทันที`
+    : 'เปิดอยู่ แต่ยังไม่ได้ตั้งรหัสรอบนับ — ตั้งก่อนถึงจะนับได้';
+}
+document.getElementById('countingModeToggle').checked = localStorage.getItem('boxqr_counting_mode') === '1';
+document.getElementById('countingModeToggle').addEventListener('change', (e) => {
+  localStorage.setItem('boxqr_counting_mode', e.target.checked ? '1' : '0');
+  refreshCountingModeHint();
+});
+document.getElementById('countSessionInput').addEventListener('input', refreshCountingModeHint);
+refreshCountingModeHint();
+
 function updateSummaryBar(summary){
   document.getElementById('summaryBoxCount').textContent = summary ? summary.totalBoxes : 0;
   document.getElementById('summaryQtyTotal').textContent = summary ? summary.totalQty : 0;
@@ -606,13 +628,9 @@ async function loadCountedList(){
   }
 }
 
-const stockScanInput = document.getElementById('stockScanInput');
-stockScanInput.addEventListener('keydown', async (e) => {
-  if(e.key !== 'Enter' || !stockScanInput.value.trim()) return;
-  const boxId = stockScanInput.value.trim();
+async function performCountScan(boxId){
   const sessionId = document.getElementById('countSessionInput').value.trim();
   const resultArea = document.getElementById('stockScanResultArea');
-  stockScanInput.value = '';
   if(!sessionId){
     resultArea.innerHTML = '<div class="status err" style="margin-top:14px;">กรุณาตั้งรหัสรอบนับก่อนเริ่มยิง</div>';
     return;
@@ -638,6 +656,14 @@ stockScanInput.addEventListener('keydown', async (e) => {
   }catch(e){
     resultArea.innerHTML = `<div class="status err" style="margin-top:14px;">เชื่อมต่อไม่สำเร็จ: ${e.message}</div>`;
   }
+}
+
+const stockScanInput = document.getElementById('stockScanInput');
+stockScanInput.addEventListener('keydown', (e) => {
+  if(e.key !== 'Enter' || !stockScanInput.value.trim()) return;
+  const boxId = stockScanInput.value.trim();
+  stockScanInput.value = '';
+  performCountScan(boxId);
 });
 
 // ---------- history (click a box -> shows items + QR right away, no tab switch) ----------
@@ -716,14 +742,21 @@ if('serviceWorker' in navigator){
   });
 }
 
-// ---------- open straight to a box's details when scanned via LINE/camera ----------
+// ---------- open straight to a box's details (or auto-count it) when scanned via LINE/camera ----------
 (function autoOpenFromUrl(){
   const params = new URLSearchParams(location.search);
   const boxId = params.get('box');
   if(!boxId) return;
-  document.querySelector('[data-tab="scan"]').click();
-  scanInput.value = boxId;
-  lookupBox(boxId, document.getElementById('scanResultArea'));
+  const countingMode = localStorage.getItem('boxqr_counting_mode') === '1';
+  const sessionId = localStorage.getItem('boxqr_count_session') || '';
+  if(countingMode && sessionId){
+    document.querySelector('[data-tab="stockcount"]').click();
+    performCountScan(boxId);
+  } else {
+    document.querySelector('[data-tab="scan"]').click();
+    scanInput.value = boxId;
+    lookupBox(boxId, document.getElementById('scanResultArea'));
+  }
 })();
 </script>
 </body>
