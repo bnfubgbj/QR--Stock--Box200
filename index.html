@@ -82,10 +82,10 @@
   .modal-box{background:#fff; border-radius:12px; padding:22px; max-width:520px; width:100%; max-height:85vh; overflow:auto;}
   .modal-box h3{margin:0 0 12px; font-size:1.05rem;}
   .file-hidden{display:none;}
-  .label-block{text-align:center; padding:1.5mm; font-family:sans-serif; page-break-after:always; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box;}
+  .label-block{text-align:center; padding:0; font-family:sans-serif; page-break-after:always; overflow:hidden; box-sizing:border-box;}
   .label-block:last-child{page-break-after:auto;}
-  .label-block .lbl-id{font-family:var(--mono); font-weight:700; margin-top:1mm; line-height:1;}
-  .label-block svg, .label-block canvas, .label-block img{display:block;}
+  .label-block .lbl-qr{margin:0 auto;}
+  .label-block .lbl-id{font-family:var(--mono); font-weight:700; line-height:1.1; margin-top:0.5mm;}
   @media print{
     body *{visibility:hidden;}
     #printArea, #printArea *{visibility:visible;}
@@ -399,11 +399,11 @@ const APP_BASE_URL = location.origin + location.pathname;
 function boxUrl(boxId){ return APP_BASE_URL + '?box=' + encodeURIComponent(boxId); }
 
 const LABEL_SIZES = {
-  '50x30': { w: 50, h: 30, qr: 90 },
-  '40x30': { w: 40, h: 30, qr: 70 },
-  '60x40': { w: 60, h: 40, qr: 110 },
-  '100x50': { w: 100, h: 50, qr: 130 },
-  'a4': { w: 210, h: 297, qr: 160 }
+  '50x30': { w: 50, h: 30, qr: 22, font: 9 },
+  '40x30': { w: 40, h: 30, qr: 18, font: 8 },
+  '60x40': { w: 60, h: 40, qr: 30, font: 10 },
+  '100x50': { w: 100, h: 50, qr: 36, font: 12 },
+  'a4': { w: 210, h: 297, qr: 60, font: 16 }
 };
 function getLabelSizeKey(){ return localStorage.getItem('boxqr_label_size') || '50x30'; }
 document.getElementById('labelSizeSelect').value = getLabelSizeKey();
@@ -425,14 +425,23 @@ function buildLabelBlock(boxId, sz){
   wrap.className = 'label-block';
   wrap.style.width = sz.w + 'mm';
   wrap.style.height = sz.h + 'mm';
+
   const qrHolder = document.createElement('div');
+  qrHolder.className = 'lbl-qr';
+  qrHolder.style.width = sz.qr + 'mm';
+  qrHolder.style.height = sz.qr + 'mm';
   wrap.appendChild(qrHolder);
+  const qrPx = Math.round(sz.qr * 3.78); // mm -> px สำหรับให้ QRCode.js วาดคมชัด ขนาดจริงบนกระดาษคุมด้วย mm ที่ตั้งไว้
+  new QRCode(qrHolder, { text: boxUrl(boxId), width: qrPx, height: qrPx, colorDark:'#1c232b', colorLight:'#ffffff' });
+  // บังคับให้ตัว QR (canvas หรือ table ที่ไลบรารีสร้าง) มีขนาดจริงตาม mm ที่ตั้งไว้เป๊ะ
+  const qrEl = qrHolder.querySelector('canvas, table, img');
+  if(qrEl){ qrEl.style.width = sz.qr + 'mm'; qrEl.style.height = sz.qr + 'mm'; }
+
   const idEl = document.createElement('div');
   idEl.className = 'lbl-id';
-  idEl.style.fontSize = Math.max(8, Math.round(sz.h * 0.9)) + 'px';
+  idEl.style.fontSize = sz.font + 'px';
   idEl.textContent = boxId;
   wrap.appendChild(idEl);
-  new QRCode(qrHolder, { text: boxUrl(boxId), width: sz.qr, height: sz.qr, colorDark:'#1c232b', colorLight:'#ffffff' });
   return wrap;
 }
 
