@@ -109,9 +109,8 @@
 
   <div class="tabs">
     <button class="tab-btn active" data-tab="pack">1. รับของเข้า / สร้าง QR</button>
-    <button class="tab-btn" data-tab="scan">2. ยิงสแกน / ตรวจสอบ</button>
-    <button class="tab-btn" data-tab="stockcount">3. นับสต็อค (ยิงไล่กล่อง)</button>
-    <button class="tab-btn" data-tab="history">4. ประวัติกล่อง</button>
+    <button class="tab-btn" data-tab="stockcount">2. นับสต็อค (ยิงไล่กล่อง)</button>
+    <button class="tab-btn" data-tab="history">3. ประวัติกล่อง</button>
   </div>
 
   <!-- PACK PANEL -->
@@ -183,7 +182,7 @@
   <div class="panel" id="panel-stockcount">
     <div class="trip-bar">
       <div class="hint" style="margin-top:0; margin-bottom:8px; font-weight:600;">รอบนับสต็อค (ตั้งครั้งเดียวต่อรอบ กันยิงกล่องซ้ำในรอบเดียวกัน)</div>
-      <div class="hint" style="margin-top:0; margin-bottom:8px;">ตอนนี้เปิดค้างอยู่ที่เมนูนี้ — ถ้ายิง QR จาก LINE ตอนนี้จะถือว่านับเข้ารอบเลย (ไม่ใช่แค่ดูรายละเอียด) ถ้าจะแค่ดูของ ให้ไปเปิดค้างที่แท็บ "2. ยิงสแกน" แทนก่อนยิง</div>
+      <div class="hint" style="margin-top:0; margin-bottom:8px;">ตอนนี้เปิดค้างอยู่ที่เมนูนี้ — ถ้ายิง QR จาก LINE ตอนนี้จะถือว่านับเข้ารอบเลย (ไม่ใช่แค่ดูรายละเอียด) ถ้าจะแค่เช็คของเฉยๆ ไม่ต้องเปิดแอพเข้าเมนูนี้ก่อนยิง</div>
       <div class="field-row" style="margin-bottom:0;">
         <div style="flex:1;">
           <label>รหัสรอบนับ</label>
@@ -812,18 +811,17 @@ document.getElementById('historyModalCloseBtn').addEventListener('click', () => 
 });
 
 // ---------- tabs ----------
+function activateTab(tabName){
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
+  document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tabName));
+  localStorage.setItem('boxqr_last_tab', tabName);
+  if(tabName === 'history') loadHistory();
+  if(tabName === 'scan') scanInput.focus();
+  if(tabName === 'stockcount'){ loadCountedList(); stockScanInput.focus(); }
+  else { stopCamera(); }
+}
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-    localStorage.setItem('boxqr_last_tab', btn.dataset.tab);
-    if(btn.dataset.tab === 'history') loadHistory();
-    if(btn.dataset.tab === 'scan') scanInput.focus();
-    if(btn.dataset.tab === 'stockcount'){ loadCountedList(); stockScanInput.focus(); }
-    else { stopCamera(); }
-  });
+  btn.addEventListener('click', () => activateTab(btn.dataset.tab));
 });
 
 if('serviceWorker' in navigator){
@@ -841,10 +839,10 @@ if('serviceWorker' in navigator){
   const lastTab = localStorage.getItem('boxqr_last_tab');
   const sessionId = localStorage.getItem('boxqr_count_session') || '';
   if(lastTab === 'stockcount' && sessionId){
-    document.querySelector('[data-tab="stockcount"]').click();
+    activateTab('stockcount');
     performCountScan(boxId);
   } else {
-    document.querySelector('[data-tab="scan"]').click();
+    activateTab('scan');
     scanInput.value = boxId;
     lookupBox(boxId, document.getElementById('scanResultArea'));
   }
