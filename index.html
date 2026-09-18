@@ -534,12 +534,16 @@ async function lookupBox(boxId, container){
     if(result.factoryBarcode) tripParts.push('ใบรับของ ' + result.factoryBarcode);
     container.innerHTML = `
       <div class="result-card" style="margin-top:16px;">
-        <div style="flex:1;">
-          <div class="id-box">${result.boxId}</div>
-          ${tripParts.length ? `<div class="hint" style="margin-top:6px;">${tripParts.join(' · ')}</div>` : ''}
+        <div class="qr-block">
+          <div id="scanQr"></div>
+          <div class="id-box" style="margin-top:8px;">${result.boxId}</div>
+        </div>
+        <div style="flex:1; min-width:200px;">
+          ${tripParts.length ? `<div class="hint" style="margin-top:0;">${tripParts.join(' · ')}</div>` : ''}
           ${itemsTableHtml(result.items)}
         </div>
       </div>`;
+    drawQr('scanQr', boxUrl(result.boxId));
   }catch(e){
     container.innerHTML = `<div class="status err" style="margin-top:14px;">ไม่พบข้อมูลกล่องรหัส "${boxId}" หรือเชื่อมต่อไม่สำเร็จ</div>`;
   }
