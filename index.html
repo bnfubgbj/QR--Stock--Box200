@@ -82,13 +82,17 @@
   .modal-box{background:#fff; border-radius:12px; padding:22px; max-width:520px; width:100%; max-height:85vh; overflow:auto;}
   .modal-box h3{margin:0 0 12px; font-size:1.05rem;}
   .file-hidden{display:none;}
+  .label-block{text-align:center; padding:6mm 4mm; font-family:sans-serif; page-break-after:always;}
+  .label-block:last-child{page-break-after:auto;}
+  .label-block .lbl-id{font-family:var(--mono); font-weight:700; margin-top:2mm;}
   @media print{
     body *{visibility:hidden;}
     #printArea, #printArea *{visibility:visible;}
-    #printArea{position:absolute; top:0; left:0; width:100%;}
+    #printArea{position:absolute; top:0; left:0; width:100%; display:block !important;}
   }
   #printArea{display:none;}
 </style>
+<style id="labelPageStyle"></style>
 </head>
 <body>
 
@@ -153,6 +157,13 @@
     <div class="btn-row">
       <button class="btn btn-primary" id="reviewBoxBtn">ตรวจสอบก่อนบันทึก</button>
       <button class="btn btn-ghost" id="printBtn" style="display:none;">พิมพ์ป้าย QR</button>
+      <select id="labelSizeSelect" style="width:auto; display:none;" title="ขนาดป้าย">
+        <option value="50x30">50 × 30 มม.</option>
+        <option value="40x30">40 × 30 มม.</option>
+        <option value="60x40">60 × 40 มม.</option>
+        <option value="100x50">100 × 50 มม.</option>
+        <option value="a4">A4 (ปกติ)</option>
+      </select>
     </div>
     <div class="status" id="packStatus"></div>
 
@@ -223,6 +234,16 @@
 
   <!-- HISTORY PANEL -->
   <div class="panel" id="panel-history">
+    <div class="btn-row" style="margin-top:0;">
+      <select id="batchLabelSizeSelect" style="width:auto;" title="ขนาดป้าย">
+        <option value="50x30">50 × 30 มม.</option>
+        <option value="40x30">40 × 30 มม.</option>
+        <option value="60x40">60 × 40 มม.</option>
+        <option value="100x50">100 × 50 มม.</option>
+        <option value="a4">A4 (ปกติ)</option>
+      </select>
+      <button class="btn btn-primary" id="batchPrintBtn">พิมพ์ป้ายที่เลือก (<span id="batchPrintCount">0</span>)</button>
+    </div>
     <div id="historyContent"><div class="empty">ยังไม่มีกล่องที่บันทึกไว้</div></div>
   </div>
 </div>
@@ -253,12 +274,7 @@
   </div>
 </div>
 
-<div id="printArea">
-  <div style="text-align:center; padding:20px; font-family:sans-serif;" id="printLabelArea">
-    <div id="printQr"></div>
-    <div style="font-family:monospace; font-size:20px; font-weight:700; margin-top:10px;" id="printId"></div>
-  </div>
-</div>
+<div id="printArea"></div>
 
 <script>
 const SIZES = ['8','8.5','9','9.5','10','10.5','11'];
@@ -381,7 +397,48 @@ function collectItemsFromGrid(){
 const APP_BASE_URL = location.origin + location.pathname;
 function boxUrl(boxId){ return APP_BASE_URL + '?box=' + encodeURIComponent(boxId); }
 
-function drawQr(elementId, text){
+const LABEL_SIZES = {
+  '50x30': { w: 50, h: 30, qr: 90 },
+  '40x30': { w: 40, h: 30, qr: 70 },
+  '60x40': { w: 60, h: 40, qr: 110 },
+  '100x50': { w: 100, h: 50, qr: 130 },
+  'a4': { w: 210, h: 297, qr: 160 }
+};
+function getLabelSizeKey(){ return localStorage.getItem('boxqr_label_size') || '50x30'; }
+document.getElementById('labelSizeSelect').value = getLabelSizeKey();
+document.getElementById('labelSizeSelect').addEventListener('change', (e) => {
+  localStorage.setItem('boxqr_label_size', e.target.value);
+});
+
+function applyLabelPageSize(){
+  const key = getLabelSizeKey();
+  const sz = LABEL_SIZES[key] || LABEL_SIZES['50x30'];
+  document.getElementById('labelPageStyle').textContent =
+    key === 'a4' ? `@page{ size:A4; margin:12mm; }` : `@page{ size:${sz.w}mm ${sz.h}mm; margin:2mm; }`;
+  return sz;
+}
+
+// วาด QR หนึ่งดวงลงในบล็อกป้าย แล้ว return element ที่สร้าง ใช้ได้ทั้งพิมพ์ทีละใบและหลายใบพร้อมกัน
+function buildLabelBlock(boxId, qrSizePx){
+  const wrap = document.createElement('div');
+  wrap.className = 'label-block';
+  const qrHolder = document.createElement('div');
+  wrap.appendChild(qrHolder);
+  const idEl = document.createElement('div');
+  idEl.className = 'lbl-id';
+  idEl.textContent = boxId;
+  wrap.appendChild(idEl);
+  new QRCode(qrHolder, { text: boxUrl(boxId), width: qrSizePx, height: qrSizePx, colorDark:'#1c232b', colorLight:'#ffffff' });
+  return wrap;
+}
+
+function printLabels(boxIds){
+  const sz = applyLabelPageSize();
+  const area = document.getElementById('printArea');
+  area.innerHTML = '';
+  boxIds.forEach(boxId => area.appendChild(buildLabelBlock(boxId, sz.qr)));
+  window.print();
+}
   const el = document.getElementById(elementId);
   el.innerHTML = '';
   new QRCode(el, { text, width:160, height:160, colorDark:'#1c232b', colorLight:'#ffffff' });
@@ -460,6 +517,7 @@ document.getElementById('confirmSaveBtn').addEventListener('click', async () => 
     document.getElementById('resultIdBox').textContent = boxId;
     document.getElementById('resultCard').style.display = 'flex';
     document.getElementById('printBtn').style.display = 'inline-block';
+    document.getElementById('labelSizeSelect').style.display = 'inline-block';
     drawQr('qrcode', boxUrl(boxId));
   }catch(e){
     statusEl.textContent = 'เกิดข้อผิดพลาด: ' + e.message;
@@ -469,9 +527,7 @@ document.getElementById('confirmSaveBtn').addEventListener('click', async () => 
 
 document.getElementById('printBtn').addEventListener('click', () => {
   const boxId = document.getElementById('resultIdBox').textContent;
-  document.getElementById('printId').textContent = boxId;
-  drawQr('printQr', boxUrl(boxId));
-  window.print();
+  printLabels([boxId]);
 });
 
 // ---------- excel template / import ----------
@@ -792,22 +848,44 @@ async function loadHistory(){
     const ids = result.boxIds || [];
     if(ids.length === 0){
       container.innerHTML = '<div class="empty">ยังไม่มีกล่องที่บันทึกไว้</div>';
+      updateBatchPrintCount();
       return;
     }
     const ul = document.createElement('ul');
     ul.className = 'history-list';
     ids.forEach(boxId => {
       const li = document.createElement('li');
-      li.innerHTML = `<span>${boxId}</span><span class="pill">ดูรายละเอียด + QR</span>`;
-      li.addEventListener('click', () => openHistoryDetail(boxId));
+      li.innerHTML = `
+        <label style="display:flex; align-items:center; gap:8px; flex:1; cursor:pointer;">
+          <input type="checkbox" class="history-check" value="${boxId}" style="width:auto;">
+          <span>${boxId}</span>
+        </label>
+        <span class="pill" style="cursor:pointer;">ดูรายละเอียด + QR</span>`;
+      li.querySelector('span.pill').addEventListener('click', () => openHistoryDetail(boxId));
+      li.querySelector('.history-check').addEventListener('change', updateBatchPrintCount);
       ul.appendChild(li);
     });
     container.innerHTML = '';
     container.appendChild(ul);
+    updateBatchPrintCount();
   }catch(e){
     container.innerHTML = '<div class="empty">โหลดประวัติไม่สำเร็จ — ตรวจสอบ Apps Script URL ด้านบน</div>';
   }
 }
+
+function updateBatchPrintCount(){
+  const n = document.querySelectorAll('.history-check:checked').length;
+  document.getElementById('batchPrintCount').textContent = n;
+}
+document.getElementById('batchLabelSizeSelect').value = getLabelSizeKey();
+document.getElementById('batchLabelSizeSelect').addEventListener('change', (e) => {
+  localStorage.setItem('boxqr_label_size', e.target.value);
+});
+document.getElementById('batchPrintBtn').addEventListener('click', () => {
+  const ids = Array.from(document.querySelectorAll('.history-check:checked')).map(el => el.value);
+  if(ids.length === 0) return;
+  printLabels(ids);
+});
 
 async function openHistoryDetail(boxId){
   const modal = document.getElementById('historyModal');
@@ -833,13 +911,22 @@ async function openHistoryDetail(boxId){
         </div>
       </div>
       <div class="btn-row">
+        <select id="historyLabelSizeSelect" style="width:auto;" title="ขนาดป้าย">
+          <option value="50x30">50 × 30 มม.</option>
+          <option value="40x30">40 × 30 มม.</option>
+          <option value="60x40">60 × 40 มม.</option>
+          <option value="100x50">100 × 50 มม.</option>
+          <option value="a4">A4 (ปกติ)</option>
+        </select>
         <button class="btn btn-primary" id="historyReprintBtn">พิมพ์ป้ายซ้ำ</button>
       </div>`;
     drawQr('historyQr', boxUrl(result.boxId));
+    document.getElementById('historyLabelSizeSelect').value = getLabelSizeKey();
+    document.getElementById('historyLabelSizeSelect').addEventListener('change', (e) => {
+      localStorage.setItem('boxqr_label_size', e.target.value);
+    });
     document.getElementById('historyReprintBtn').addEventListener('click', () => {
-      document.getElementById('printId').textContent = result.boxId;
-      drawQr('printQr', boxUrl(result.boxId));
-      window.print();
+      printLabels([result.boxId]);
     });
   }catch(e){
     body.innerHTML = `<div class="status err">โหลดข้อมูลกล่อง "${boxId}" ไม่สำเร็จ</div>`;
