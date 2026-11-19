@@ -477,8 +477,8 @@ const APP_BASE_URL = location.origin + location.pathname;
 function boxUrl(boxId){ return APP_BASE_URL + '?box=' + encodeURIComponent(boxId); }
 
 const LABEL_SIZES = {
-  '50x30': { w: 50, h: 30, qr: 20, font: 9, info: 8 },
-  '40x30': { w: 40, h: 30, qr: 17, font: 8, info: 7 },
+  '50x30': { w: 50, h: 30, qr: 21, font: 9, info: 8 },
+  '40x30': { w: 40, h: 30, qr: 19, font: 8, info: 7 },
   '60x40': { w: 60, h: 40, qr: 28, font: 10, info: 9 },
   '100x50': { w: 100, h: 50, qr: 34, font: 12, info: 11 },
   'a4': { w: 210, h: 297, qr: 60, font: 16, info: 15 }
@@ -540,7 +540,7 @@ function buildLabelBlock(boxId, sz, info){
   qrHolder.style.height = sz.qr + 'mm';
   wrap.appendChild(qrHolder);
   const qrPx = Math.round(sz.qr * 3.78); // mm -> px สำหรับให้ QRCode.js วาดคมชัด ขนาดจริงบนกระดาษคุมด้วย mm ที่ตั้งไว้
-  new QRCode(qrHolder, { text: boxUrl(boxId), width: qrPx, height: qrPx, colorDark:'#1c232b', colorLight:'#ffffff' });
+  new QRCode(qrHolder, { text: boxUrl(boxId), width: qrPx, height: qrPx, colorDark:'#000000', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.L });
   // บังคับให้ตัว QR (canvas หรือ table ที่ไลบรารีสร้าง) มีขนาดจริงตาม mm ที่ตั้งไว้เป๊ะ
   const qrEl = qrHolder.querySelector('canvas, table, img');
   if(qrEl){ qrEl.style.width = sz.qr + 'mm'; qrEl.style.height = sz.qr + 'mm'; }
@@ -586,7 +586,7 @@ async function printLabels(boxIds, infoMap){
 function drawQr(elementId, text){
   const el = document.getElementById(elementId);
   el.innerHTML = '';
-  new QRCode(el, { text, width:160, height:160, colorDark:'#1c232b', colorLight:'#ffffff' });
+  new QRCode(el, { text, width:200, height:200, colorDark:'#000000', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.L });
 }
 
 function itemsTableHtml(items){
