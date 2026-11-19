@@ -148,6 +148,7 @@
     <div class="btn-row" style="margin-top:0;">
       <button class="btn btn-primary" id="modeQuickBtn">⚡ กรอกเร็ว (1 กล่อง = 1 สี 1 เบอร์)</button>
       <button class="btn btn-ghost" id="modeDetailBtn">กล่องผสมหลายสี/หลายเบอร์</button>
+      <button class="btn btn-ghost" id="modeBulkBtn">📑 นำเข้าหลายกล่องจาก Excel</button>
     </div>
 
     <!-- QUICK MODE -->
@@ -187,6 +188,32 @@
         <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">บันทึกแล้ววันนี้ <span id="quickTodayCount">0</span> กล่อง (ล่าสุดอยู่บนสุด)</div>
         <div id="quickRecent"></div>
       </div>
+    </div>
+
+    <!-- BULK IMPORT MODE -->
+    <div id="bulkMode" style="display:none;">
+      <div class="hint" style="margin-top:0;">เตรียมไฟล์ Excel ทีเดียวทั้งเที่ยว (1 แถว = 1 สี/เบอร์ในถัง · ถังเดียวกันใช้เลข "ถังที่" เดียวกัน) แล้วนำเข้า ระบบสร้างรหัสกล่อง + QR ให้ทุกถังและพิมพ์ป้ายพร้อมกัน จากนั้นนำป้ายไปไล่แปะ</div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="bulkTemplateBtn">ดาวน์โหลดแม่แบบ Excel</button>
+        <button class="btn btn-primary" id="bulkImportBtn">เลือกไฟล์ Excel</button>
+        <input type="file" id="bulkFileInput" class="file-hidden" accept=".xlsx,.xls,.csv">
+      </div>
+      <div class="status" id="bulkStatus"></div>
+      <div id="bulkPreview"></div>
+      <div id="bulkActions" style="display:none;">
+        <div class="btn-row">
+          <button class="btn btn-primary" id="bulkSaveBtn">บันทึกทั้งหมด + พิมพ์ป้าย QR</button>
+          <select id="bulkLabelSize" style="width:auto;" title="ขนาดป้าย">
+            <option value="50x30">50 × 30 มม.</option>
+            <option value="40x30">40 × 30 มม.</option>
+            <option value="60x40">60 × 40 มม.</option>
+            <option value="100x50">100 × 50 มม.</option>
+            <option value="a4">A4 (ปกติ)</option>
+          </select>
+          <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:600;"><input type="checkbox" id="bulkAutoPrint" checked style="width:auto;"> พิมพ์ป้ายอัตโนมัติหลังบันทึก</label>
+        </div>
+      </div>
+      <div id="bulkResult"></div>
     </div>
 
     <div id="detailMode" style="display:none;">
@@ -1608,15 +1635,15 @@ document.getElementById('quickSaveBtn').addEventListener('click', quickSave);
 ['quickDozen','quickExtra'].forEach(id => document.getElementById(id).addEventListener('keydown', (e) => { if(e.key === 'Enter') quickSave(); }));
 
 function setPackMode(mode){
-  const quick = mode === 'quick';
-  document.getElementById('quickMode').style.display = quick ? '' : 'none';
-  document.getElementById('detailMode').style.display = quick ? 'none' : '';
-  document.getElementById('modeQuickBtn').className = 'btn ' + (quick ? 'btn-primary' : 'btn-ghost');
-  document.getElementById('modeDetailBtn').className = 'btn ' + (quick ? 'btn-ghost' : 'btn-primary');
+  ['quick','detail','bulk'].forEach(m => {
+    document.getElementById(m + 'Mode').style.display = (m === mode) ? '' : 'none';
+    document.getElementById('mode' + m.charAt(0).toUpperCase() + m.slice(1) + 'Btn').className = 'btn ' + (m === mode ? 'btn-primary' : 'btn-ghost');
+  });
   localStorage.setItem('boxqr_pack_mode', mode);
 }
 document.getElementById('modeQuickBtn').addEventListener('click', () => setPackMode('quick'));
 document.getElementById('modeDetailBtn').addEventListener('click', () => setPackMode('detail'));
+document.getElementById('modeBulkBtn').addEventListener('click', () => setPackMode('bulk'));
 async function syncQuickColors(){
   try{
     const r = await callBackend({ action:'colors' });
@@ -1627,7 +1654,7 @@ async function syncQuickColors(){
   }catch(e){ /* ใช้รายชื่อสีที่มีในเครื่องต่อไป */ }
 }
 renderQuickChips(); updateQuickPreview(); renderQuickRecent(); syncQuickColors();
-setPackMode(localStorage.getItem('boxqr_pack_mode') === 'detail' ? 'detail' : 'quick');
+setPackMode(['detail','bulk'].includes(localStorage.getItem('boxqr_pack_mode')) ? localStorage.getItem('boxqr_pack_mode') : 'quick');
 
 // ---------- export Excel for accounting ----------
 document.getElementById('exportAcctBtn').addEventListener('click', async () => {
@@ -1688,6 +1715,175 @@ document.getElementById('exportAcctBtn').addEventListener('click', async () => {
     st.textContent = 'ส่งออกไม่สำเร็จ: ' + e.message; st.className = 'status err';
   }
 });
+
+// ---------- bulk import from Excel (นำเข้าหลายกล่อง สร้าง QR ทีเดียว) ----------
+const BULK_HEADER = ['ถังที่','เที่ยว','วันที่รับ','สี','เบอร์','จำนวน (โหล)','เศษ (คู่) ถ้ามี'];
+let bulkBoxes = [];
+let bulkFileKey = '';
+document.getElementById('bulkLabelSize').value = getLabelSizeKey();
+document.getElementById('bulkLabelSize').addEventListener('change', (e) => localStorage.setItem('boxqr_label_size', e.target.value));
+
+document.getElementById('bulkTemplateBtn').addEventListener('click', () => {
+  const rows = [
+    BULK_HEADER,
+    [1, '4', '18/11/69', 'เหลือง', '10', 80, ''],
+    [2, '4', '18/11/69', 'ขาว', '9', 60, ''],
+    [3, '4', '18/11/69', 'ดำ', '9.5', 10, ''],
+    [3, '4', '18/11/69', 'ขาว', '9.5', 15, '']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:8},{wch:8},{wch:12},{wch:14},{wch:8},{wch:14},{wch:16}];
+  const info = XLSX.utils.aoa_to_sheet([
+    ['วิธีกรอก'],
+    ['1 แถว = 1 สี/เบอร์ในถัง ถังที่มีหลายสีหรือหลายเบอร์ ให้ใช้เลข "ถังที่" เดียวกัน (ตัวอย่างถังที่ 3)'],
+    ['สี ต้องเป็นหนึ่งใน: ' + loadQuickColors().join(', ')],
+    ['เบอร์ ต้องเป็นหนึ่งใน: ' + SIZES.join(', ')],
+    ['จำนวนเป็น "โหล" (เศษที่ไม่เต็มโหลใส่ในช่อง เศษ (คู่))'],
+    ['เที่ยว/วันที่รับ ถ้าเว้นว่าง จะใช้ค่าจากช่องด้านบนของหน้านี้ — วันที่ให้พิมพ์เป็นข้อความ เช่น 18/11/69'],
+    ['ลบแถวตัวอย่างออกก่อนใช้งานจริง']
+  ]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'ข้อมูล');
+  XLSX.utils.book_append_sheet(wb, info, 'วิธีกรอก');
+  XLSX.writeFile(wb, 'box-import-template.xlsx');
+});
+document.getElementById('bulkImportBtn').addEventListener('click', () => document.getElementById('bulkFileInput').click());
+document.getElementById('bulkFileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => handleBulkBuffer(evt.target.result, `${file.name}|${file.size}|${file.lastModified}`);
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+});
+
+function parseBulkRows(rows){
+  const header = (rows[0] || []).map(h => String(h).trim());
+  const find = (...keys) => header.findIndex(h => keys.some(k => h.includes(k)));
+  const cBox = find('ถัง'), cTrip = find('เที่ยว'), cDate = find('วันที่'), cColor = find('สี'), cSize = find('เบอร์'), cDoz = find('โหล'), cExtra = find('เศษ');
+  if(cColor < 0 || cSize < 0 || cDoz < 0) throw new Error('ไม่พบหัวคอลัมน์ "สี", "เบอร์", "จำนวน (โหล)" — ใช้แม่แบบที่ดาวน์โหลดจากปุ่มด้านบน');
+  const known = loadQuickColors().map(c => c.trim());
+  const trip0 = getTripInfo();
+  const lines = [];
+  for(let r = 1; r < rows.length; r++){
+    const row = rows[r] || [];
+    const cell = (c) => (c >= 0 && row[c] !== undefined && row[c] !== null) ? String(row[c]).trim() : '';
+    if(![cBox,cTrip,cDate,cColor,cSize,cDoz,cExtra].some(c => cell(c) !== '')) continue; // แถวว่าง
+    const L = { rowNo: r + 1, box: cell(cBox), trip: cell(cTrip), date: cell(cDate), color: cell(cColor), sizeRaw: cell(cSize), dozRaw: cell(cDoz), extraRaw: cell(cExtra), errs: [] };
+    if(!L.color) L.errs.push('ไม่มีสี');
+    else if(!known.includes(L.color)) L.errs.push('ไม่รู้จักสี "' + L.color + '" (ตรวจตัวสะกด หรือเพิ่มสีใหม่ในโหมดกรอกเร็วก่อน)');
+    const sz = parseFloat(L.sizeRaw.replace(',', '.'));
+    L.size = (!isNaN(sz) && SIZES.includes(String(sz))) ? String(sz) : '';
+    if(!L.size) L.errs.push('เบอร์ไม่ถูกต้อง (ใช้ ' + SIZES.join(', ') + ')');
+    const dz = L.dozRaw === '' ? 0 : parseFloat(L.dozRaw.replace(/,/g, ''));
+    const ex = L.extraRaw === '' ? 0 : parseFloat(L.extraRaw);
+    if(isNaN(dz) || isNaN(ex)) L.errs.push('จำนวนไม่ใช่ตัวเลข');
+    L.pairs = (isNaN(dz) || isNaN(ex)) ? 0 : Math.round(dz * 12) + Math.round(ex);
+    if(!isNaN(dz) && !isNaN(ex) && L.pairs <= 0) L.errs.push('จำนวนต้องมากกว่า 0');
+    if(/^\d{5}$/.test(L.date)) L.errs.push('วันที่เป็นตัวเลข ให้พิมพ์เป็นข้อความ เช่น 18/11/69');
+    lines.push(L);
+  }
+  // จัดกลุ่มเป็นกล่อง: เลขถังที่เดียวกัน = กล่องเดียวกัน, ไม่ใส่เลขถัง = แต่ละแถวคือ 1 กล่อง
+  const boxes = [], byKey = {};
+  lines.forEach(L => {
+    const key = L.box ? 'B:' + L.box : 'R:' + L.rowNo;
+    if(!byKey[key]){ byKey[key] = { key, label: L.box || '', tripNo: '', receiptDate: '', items: [], lines: [] }; boxes.push(byKey[key]); }
+    const b = byKey[key];
+    b.lines.push(L);
+    if(!b.tripNo && L.trip) b.tripNo = L.trip;
+    if(!b.receiptDate && L.date) b.receiptDate = L.date;
+    if(!L.errs.length){
+      const ex = b.items.find(it => it.color === L.color && it.size === L.size);
+      if(ex) ex.qty += L.pairs; else b.items.push({ color: L.color, size: L.size, qty: L.pairs });
+    }
+  });
+  boxes.forEach(b => { if(!b.tripNo) b.tripNo = trip0.tripNo; if(!b.receiptDate) b.receiptDate = trip0.receiptDate; });
+  return { lines, boxes };
+}
+
+function handleBulkBuffer(buf, fileKey){
+  const st = document.getElementById('bulkStatus');
+  const prev = document.getElementById('bulkPreview');
+  document.getElementById('bulkResult').innerHTML = '';
+  try{
+    const wb = XLSX.read(buf, { type:'array' });
+    const name = wb.SheetNames.includes('ข้อมูล') ? 'ข้อมูล' : wb.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { header:1, raw:false, defval:'' });
+    if(rows.length < 2) throw new Error('ไฟล์ไม่มีข้อมูล');
+    const { lines, boxes } = parseBulkRows(rows);
+    if(!lines.length) throw new Error('ไม่พบแถวข้อมูล');
+    bulkBoxes = boxes;
+    bulkFileKey = fileKey || '';
+    const errCount = lines.filter(l => l.errs.length).length;
+    const okBoxes = boxes.filter(b => b.items.length && !b.lines.some(l => l.errs.length));
+    const totalPairs = boxes.reduce((s, b) => s + b.items.reduce((x, it) => x + it.qty, 0), 0);
+    const boxNo = new Map(); boxes.forEach((b, i) => boxNo.set(b, i + 1));
+    let body = '';
+    boxes.forEach((b, i) => b.lines.forEach((L, j) => {
+      const bad = L.errs.length > 0;
+      body += `<tr style="${bad ? 'background:#fbeceb;' : ''}">` +
+        `<td style="text-align:center; font-weight:700;">${j === 0 ? i + 1 : ''}</td>` +
+        `<td>${escH(L.box || '')}</td><td>${escH(j === 0 ? b.tripNo : '')}</td><td>${escH(j === 0 ? b.receiptDate : '')}</td>` +
+        `<td>${escH(L.color)}</td><td>${escH(L.sizeRaw)}</td><td style="text-align:right;">${bad ? escH(L.dozRaw) : dozText(L.pairs)}</td><td style="text-align:right;">${bad ? '' : fmtNum(L.pairs)}</td>` +
+        `<td style="color:${bad ? 'var(--danger)' : 'var(--ok)'}; font-weight:700;">${bad ? 'แถว ' + L.rowNo + ': ' + escH(L.errs.join(' · ')) : '✓'}</td></tr>`;
+    }));
+    prev.innerHTML = `<div class="table-scroll" style="max-height:55vh; overflow:auto;"><table><thead><tr><th>กล่องที่</th><th>ถังที่ (ไฟล์)</th><th>เที่ยว</th><th>วันที่รับ</th><th>สี</th><th>เบอร์</th><th>โหล</th><th>คู่</th><th>ตรวจสอบ</th></tr></thead><tbody>${body}</tbody></table></div>`;
+    st.innerHTML = `พบ <b>${boxes.length}</b> กล่อง · รวม ${dozFull(totalPairs)} (${fmtNum(totalPairs)} คู่)` + (errCount ? ` · <span style="color:var(--danger);">มี ${errCount} แถวที่ต้องแก้ในไฟล์แล้วนำเข้าใหม่</span>` : ' · ข้อมูลถูกต้องทุกแถว');
+    st.className = 'status ' + (errCount ? 'err' : 'ok');
+    document.getElementById('bulkActions').style.display = (errCount === 0 && boxes.length) ? '' : 'none';
+    document.getElementById('bulkSaveBtn').textContent = `บันทึกทั้งหมด ${boxes.length} กล่อง + พิมพ์ป้าย QR`;
+  }catch(err){
+    bulkBoxes = [];
+    prev.innerHTML = '';
+    document.getElementById('bulkActions').style.display = 'none';
+    st.textContent = 'นำเข้าไฟล์ไม่สำเร็จ: ' + err.message;
+    st.className = 'status err';
+  }
+}
+
+async function bulkSave(){
+  const st = document.getElementById('bulkStatus');
+  const res = document.getElementById('bulkResult');
+  if(!bulkBoxes.length) return;
+  const done = JSON.parse(localStorage.getItem('boxqr_bulk_done') || '[]');
+  if(bulkFileKey && done.includes(bulkFileKey) && !confirm('ไฟล์นี้เคยนำเข้าไปแล้ว ถ้าบันทึกซ้ำจะได้กล่องซ้ำ (ถังเดียวกันมี QR 2 ชุด) — ต้องการบันทึกอีกครั้งจริงหรือไม่?')) return;
+  if(!confirm(`บันทึก ${bulkBoxes.length} กล่อง และสร้าง QR ทั้งหมด?`)) return;
+  const btn = document.getElementById('bulkSaveBtn');
+  btn.disabled = true;
+  st.textContent = 'กำลังบันทึก...'; st.className = 'status';
+  try{
+    let pending = bulkBoxes.map(b => ({ boxId: genBoxId(), tripNo: b.tripNo, receiptDate: b.receiptDate, items: b.items, _src: b }));
+    const created = []; // เรียงตามลำดับในไฟล์
+    const idBySrc = new Map();
+    for(let attempt = 0; attempt < 6 && pending.length; attempt++){
+      const r = await callBackend({ action:'saveMany', boxes: pending.map(p => ({ boxId: p.boxId, tripNo: p.tripNo, receiptDate: p.receiptDate, items: p.items })) });
+      if(!r.ok) throw new Error('บันทึกไม่สำเร็จ');
+      const savedSet = new Set(r.saved || []);
+      pending.forEach(p => { if(savedSet.has(p.boxId)) idBySrc.set(p._src, p.boxId); });
+      pending = pending.filter(p => !savedSet.has(p.boxId));
+      pending.forEach(p => { p.boxId = genBoxId(); }); // รหัสซ้ำ -> สุ่มใหม่
+    }
+    if(pending.length) throw new Error('สร้างรหัสไม่ครบ ลองอีกครั้ง');
+    const infoMap = {}, ids = [];
+    bulkBoxes.forEach(b => { const id = idBySrc.get(b); ids.push(id); infoMap[id] = { tripNo: b.tripNo, items: b.items }; });
+    if(bulkFileKey){ done.push(bulkFileKey); localStorage.setItem('boxqr_bulk_done', JSON.stringify(done.slice(-50))); }
+    st.textContent = `บันทึกแล้ว ${ids.length} กล่อง`; st.className = 'status ok';
+    document.getElementById('bulkActions').style.display = 'none';
+    document.getElementById('bulkPreview').innerHTML = '';
+    res.innerHTML = `
+      <div class="btn-row" style="margin-top:0;"><button class="btn btn-primary" id="bulkReprintBtn">🖨 พิมพ์ป้าย ${ids.length} ใบอีกครั้ง</button></div>
+      <div class="hint">ป้ายพิมพ์ตามลำดับในไฟล์ (กล่องที่ 1, 2, 3 …) ใต้ QR มี เที่ยว | สี | เบอร์ | จำนวน ให้เทียบกับป้ายโรงงานบนถังก่อนแปะ · พิมพ์ซ้ำภายหลังได้ที่เมนู 3 ประวัติกล่อง</div>
+      <div class="table-scroll" style="max-height:50vh; overflow:auto;"><table><thead><tr><th>#</th><th>รหัสกล่อง</th><th>รายการ</th></tr></thead><tbody>${ids.map((id, i) => `<tr><td>${i + 1}</td><td><span class="id-box" style="font-size:.8rem;">${escH(id)}</span></td><td>${escH(labelInfoText(infoMap[id]))}</td></tr>`).join('')}</tbody></table></div>`;
+    document.getElementById('bulkReprintBtn').addEventListener('click', () => printLabels(ids, infoMap));
+    bulkBoxes = [];
+    if(document.getElementById('bulkAutoPrint').checked) await printLabels(ids, infoMap);
+  }catch(e){
+    st.textContent = 'เกิดข้อผิดพลาด: ' + e.message; st.className = 'status err';
+  }finally{
+    btn.disabled = false;
+  }
+}
+document.getElementById('bulkSaveBtn').addEventListener('click', bulkSave);
 
 // ---------- tabs ----------
 function activateTab(tabName){
