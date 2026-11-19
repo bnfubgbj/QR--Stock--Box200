@@ -348,7 +348,7 @@
 <div id="printArea"></div>
 
 <script>
-const SIZES = ['8','8.5','9','9.5','10','10.5','11'];
+const SIZES = ['8.5','9','9.5','10','10.5','11'];
 let colorRows = [{name:'ขาว'}, {name:'ดำ'}];
 
 // ---------- backend config ----------
@@ -803,12 +803,14 @@ function renderColorSizeSummary(rows){
   });
   if(colorOrder.length === 0){ container.innerHTML = '<div class="empty">ยังไม่มีข้อมูลสรุป</div>'; return; }
 
-  let head = '<thead><tr><th class="colhead-color">สี</th>' + SIZES.map(s=>`<th>${s}</th>`).join('') + '<th>รวม</th></tr></thead>';
-  let grandTotals = SIZES.map(() => 0);
+  const sumSizes = SIZES.slice();
+  rows.forEach(r => r.items.forEach(it => { const s = String(it.size); if(!sumSizes.includes(s)) sumSizes.push(s); }));
+  let head = '<thead><tr><th class="colhead-color">สี</th>' + sumSizes.map(s=>`<th>${s}</th>`).join('') + '<th>รวม</th></tr></thead>';
+  let grandTotals = sumSizes.map(() => 0);
   let grandAll = 0;
   let body = colorOrder.map(color => {
     let rowTotal = 0;
-    const cells = SIZES.map((s, i) => {
+    const cells = sumSizes.map((s, i) => {
       const q = totals[color][s] || 0;
       grandTotals[i] += q;
       rowTotal += q;
@@ -1187,13 +1189,14 @@ cutScanInput.addEventListener('keydown', (e) => {
 });
 
 // ---------- quick entry mode (กรอกเร็ว: 1 กล่อง = 1 สี 1 เบอร์ กรอกเป็นโหล) ----------
-const QUICK_SIZES = ['8','8.5','9','9.5','10','10.5','11'];
+const QUICK_SIZES = SIZES;
 let quickColor = '', quickSize = '';
+const DEFAULT_QUICK_COLORS = ['น้ำเงิน','เขียว','แดง','เหลือง','ขาว','ดำ','เทา','ดำหน้าขาว'];
 function loadQuickColors(){
-  try{ const a = JSON.parse(localStorage.getItem('boxqr_quick_colors') || 'null'); if(Array.isArray(a) && a.length) return a; }catch(e){}
-  return ['ขาว','ดำ','ส้ม'];
+  try{ const a = JSON.parse(localStorage.getItem('boxqr_quick_colors_v2') || 'null'); if(Array.isArray(a) && a.length) return a; }catch(e){}
+  return DEFAULT_QUICK_COLORS.slice();
 }
-function saveQuickColors(a){ localStorage.setItem('boxqr_quick_colors', JSON.stringify(a)); }
+function saveQuickColors(a){ localStorage.setItem('boxqr_quick_colors_v2', JSON.stringify(a)); }
 function renderQuickChips(){
   const cEl = document.getElementById('quickColors');
   cEl.innerHTML = '';
