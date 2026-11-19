@@ -228,7 +228,7 @@
       </div>
       <div style="flex:1; min-width:220px;">
         <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">เนื้อหาในกล่องนี้ (เก็บใน Google Sheet)</div>
-        <table id="summaryTable"><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน</th></tr></thead><tbody></tbody></table>
+        <table id="summaryTable"><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน (โหล)</th><th>จำนวน (คู่)</th></tr></thead><tbody></tbody></table>
         <div class="total-line" id="totalLine"></div>
       </div>
     </div>
@@ -265,6 +265,7 @@
       <button class="btn btn-primary" id="camStartBtn">📷 เปิดกล้องสแกนต่อเนื่อง</button>
       <button class="btn btn-ghost" id="camStopBtn" style="display:none;">ปิดกล้อง</button>
     </div>
+    <div class="hint" id="camHint" style="margin-top:0; margin-bottom:8px;">ใช้บนมือถือได้: เปิดลิงก์แอปด้วย Chrome (Android) หรือ Safari (iPhone) แล้วกด "อนุญาต" กล้อง — อย่าเปิดจากในแอป LINE เพราะกล้องมักใช้ไม่ได้</div>
     <div class="cam-wrap" id="camWrap">
       <video id="camVideo" playsinline muted></video>
       <div class="cam-frame"></div>
@@ -274,7 +275,8 @@
 
     <label>หรือยิงด้วยเครื่อง handheld / พิมพ์รหัสเอง</label>
     <input type="text" id="stockScanInput" placeholder="รอรับข้อมูลจากเครื่องสแกน...">
-    <div class="hint">กล่องเดียวกันยิงซ้ำในรอบนี้จะไม่บันทึกซ้ำใน Google Sheet</div>
+    <label style="display:flex; align-items:center; gap:8px; font-weight:600; margin-top:10px;"><input type="checkbox" id="countConfirmChk" style="width:auto;"> ยิงแล้วดูรายการก่อน แล้วกด "รับนับสต็อก" ทีละถัง (แนะนำ)</label>
+    <div class="hint">กล่องเดียวกันยิงซ้ำในรอบนี้จะไม่บันทึกซ้ำ · ใช้ handheld: ยิงแล้วกด Enter อีกครั้งเพื่อรับนับ</div>
     <div id="stockScanResultArea"></div>
     <div class="btn-row">
       <button class="btn btn-primary" id="exportAcctBtn">⬇ ส่งออก Excel ให้ฝ่ายบัญชี</button>
@@ -282,12 +284,12 @@
     <div class="status" id="exportStatus"></div>
     <div class="hint">ไฟล์มี 3 ชีท: รายกล่อง (มีช่องให้บัญชีติ๊กตรวจ) · สรุปสี×เบอร์ · กล่องที่อยู่ในระบบแต่ยังไม่ได้ยิงนับในรอบนี้</div>
     <div style="margin-top:20px;">
-      <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">สรุปยอดรวมทั้งรอบ (ทุกกล่องที่นับแล้ว แยกตามสี × เบอร์)</div>
-      <div class="table-scroll" id="stockColorSizeSummary"><div class="empty">ยังไม่มีข้อมูลสรุป</div></div>
+      <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">ตารางที่นับแล้วในรอบนี้ (ถังที่ 1, 2, 3 …) <span id="countTableSummary" style="color:var(--steel-900);"></span></div>
+      <div id="stockCountedList" style="max-height:60vh; overflow:auto;"><div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div></div>
     </div>
     <div style="margin-top:20px;">
-      <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">รายการกล่องที่นับแล้วในรอบนี้ (แยกตามกล่อง)</div>
-      <div id="stockCountedList"><div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div></div>
+      <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">สรุปยอดรวมทั้งรอบ (แยกตามสี × เบอร์)</div>
+      <div class="table-scroll" id="stockColorSizeSummary"><div class="empty">ยังไม่มีข้อมูลสรุป</div></div>
     </div>
   </div>
 
@@ -314,6 +316,8 @@
         <option value="a4">A4 (ปกติ)</option>
       </select>
       <button class="btn btn-primary" id="batchPrintBtn">พิมพ์ป้ายที่เลือก (<span id="batchPrintCount">0</span>)</button>
+      <button class="btn btn-ghost" id="selectAllBtn">เลือกทั้งหมด</button>
+      <button class="btn btn-ghost" id="batchDeleteBtn" style="color:var(--danger); border-color:var(--danger);">🗑 ลบที่เลือก (<span id="batchDeleteCount">0</span>)</button>
     </div>
     <div id="historyContent"><div class="empty">ยังไม่มีกล่องที่บันทึกไว้</div></div>
   </div>
@@ -325,7 +329,7 @@
     <h3>ตรวจสอบข้อมูลก่อนบันทึก</h3>
     <div class="id-box" id="confirmBoxId"></div>
     <div class="hint" id="confirmTripInfo" style="margin-bottom:6px;"></div>
-    <table style="margin-top:12px;"><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน</th></tr></thead><tbody id="confirmBody"></tbody></table>
+    <table style="margin-top:12px;"><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน (โหล)</th><th>จำนวน (คู่)</th></tr></thead><tbody id="confirmBody"></tbody></table>
     <div class="total-line" id="confirmTotal"></div>
     <div class="btn-row">
       <button class="btn btn-ghost" id="confirmEditBtn">แก้ไข</button>
@@ -493,6 +497,18 @@ function applyLabelPageSize(){
 
 // วาด QR หนึ่งดวงลงในบล็อกป้าย แล้ว return element ที่สร้าง ใช้ได้ทั้งพิมพ์ทีละใบและหลายใบพร้อมกัน
 function fmtNum(n){ return Number(n).toLocaleString('en-US'); }
+// แสดงจำนวนเป็นโหล (ถ้าไม่ลงตัวแสดงโหล + เศษคู่) — ข้อมูลในชีทยังเก็บเป็น "คู่"
+function dozText(pairs){
+  const q = Number(pairs) || 0;
+  const d = Math.floor(q / 12), r = q % 12;
+  return r === 0 ? fmtNum(d) : `${fmtNum(d)} + ${r} คู่`;
+}
+// ใช้ในประโยค/ยอดรวม: "90 โหล" หรือ "90 โหล 5 คู่"
+function dozFull(pairs){
+  const q = Number(pairs) || 0;
+  const d = Math.floor(q / 12), r = q % 12;
+  return r === 0 ? `${fmtNum(d)} โหล` : `${fmtNum(d)} โหล ${r} คู่`;
+}
 function qtyText(totalPairs){
   return (totalPairs % 12 === 0) ? `${fmtNum(totalPairs/12)} โหล` : `${fmtNum(totalPairs)} คู่`;
 }
@@ -573,8 +589,8 @@ function drawQr(elementId, text){
 
 function itemsTableHtml(items){
   const total = items.reduce((s,it) => s + Number(it.qty), 0);
-  const rows = items.map(it => `<tr><td>${it.color}</td><td>${it.size}</td><td>${it.qty}</td></tr>`).join('');
-  return `<table style="margin-top:10px;"><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน</th></tr></thead><tbody>${rows}</tbody></table><div class="total-line">รวมทั้งหมด: ${total} คู่</div>`;
+  const rows = items.map(it => `<tr><td>${escH(it.color)}</td><td>${escH(it.size)}</td><td style="text-align:right;">${dozText(it.qty)}</td><td style="text-align:right;">${fmtNum(it.qty)}</td></tr>`).join('');
+  return `<table style="margin-top:10px;"><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน (โหล)</th><th>จำนวน (คู่)</th></tr></thead><tbody>${rows}</tbody></table><div class="total-line">รวมทั้งหมด: ${dozFull(total)} (${fmtNum(total)} คู่)</div>`;
 }
 
 // ---------- review / confirm step ----------
@@ -603,11 +619,11 @@ document.getElementById('reviewBoxBtn').addEventListener('click', () => {
   let total = 0;
   items.forEach(it => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${it.color}</td><td>${it.size}</td><td>${it.qty}</td>`;
+    tr.innerHTML = `<td>${it.color}</td><td>${it.size}</td><td>${dozText(it.qty)}</td><td>${it.qty}</td>`;
     tbody.appendChild(tr);
     total += it.qty;
   });
-  document.getElementById('confirmTotal').textContent = `รวมทั้งหมด: ${total} คู่`;
+  document.getElementById('confirmTotal').textContent = `รวมทั้งหมด: ${dozFull(total)} (${fmtNum(total)} คู่)`;
   document.getElementById('confirmModal').dataset.boxid = boxId;
   document.getElementById('confirmModal').classList.add('show');
 });
@@ -636,11 +652,11 @@ document.getElementById('confirmSaveBtn').addEventListener('click', async () => 
     let total = 0;
     items.forEach(it => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${it.color}</td><td>${it.size}</td><td>${it.qty}</td>`;
+      tr.innerHTML = `<td>${it.color}</td><td>${it.size}</td><td>${dozText(it.qty)}</td><td>${it.qty}</td>`;
       tbody.appendChild(tr);
       total += it.qty;
     });
-    document.getElementById('totalLine').textContent = `รวมทั้งหมด: ${total} คู่`;
+    document.getElementById('totalLine').textContent = `รวมทั้งหมด: ${dozFull(total)} (${fmtNum(total)} คู่)`;
     document.getElementById('resultIdBox').textContent = boxId;
     document.getElementById('resultCard').style.display = 'flex';
     document.getElementById('printBtn').style.display = 'inline-block';
@@ -791,21 +807,42 @@ document.getElementById('genSessionBtn').addEventListener('click', () => {
 });
 loadSessionId();
 
+// รอบนับใช้ร่วมกันทุกเครื่อง: เปิดเมนู 2 แล้วดึงรอบล่าสุดจากชีท / แก้ที่เครื่องไหนก็บันทึกขึ้นชีทให้ทุกเครื่องตาม
+function pushCountSession(){
+  callBackend({ action:'setSession', sessionId: document.getElementById('countSessionInput').value.trim(), countDate: document.getElementById('countDateInput').value.trim() }).catch(()=>{});
+}
+async function syncCountSession(){
+  try{
+    const r = await callBackend({ action:'getSession' });
+    if(r.sessionId){
+      document.getElementById('countSessionInput').value = r.sessionId;
+      document.getElementById('countDateInput').value = r.countDate || '';
+      localStorage.setItem('boxqr_count_session', r.sessionId);
+      localStorage.setItem('boxqr_count_date', r.countDate || '');
+    }
+  }catch(e){ /* ใช้ค่าที่จำไว้ในเครื่อง */ }
+  loadCountedList();
+}
+document.getElementById('countSessionInput').addEventListener('change', pushCountSession);
+document.getElementById('countDateInput').addEventListener('change', pushCountSession);
+document.getElementById('genSessionBtn').addEventListener('click', () => setTimeout(pushCountSession, 0));
+
 function renderColorSizeSummary(rows){
   const container = document.getElementById('stockColorSizeSummary');
   const totals = {}; // color -> { size: qty }
   const colorOrder = [];
+  const sumSizes = SIZES.slice();
   rows.forEach(r => {
     r.items.forEach(it => {
+      const s = String(it.size);
+      if(!sumSizes.includes(s)) sumSizes.push(s);
       if(!totals[it.color]){ totals[it.color] = {}; colorOrder.push(it.color); }
-      totals[it.color][it.size] = (totals[it.color][it.size] || 0) + Number(it.qty);
+      totals[it.color][s] = (totals[it.color][s] || 0) + Number(it.qty);
     });
   });
   if(colorOrder.length === 0){ container.innerHTML = '<div class="empty">ยังไม่มีข้อมูลสรุป</div>'; return; }
 
-  const sumSizes = SIZES.slice();
-  rows.forEach(r => r.items.forEach(it => { const s = String(it.size); if(!sumSizes.includes(s)) sumSizes.push(s); }));
-  let head = '<thead><tr><th class="colhead-color">สี</th>' + sumSizes.map(s=>`<th>${s}</th>`).join('') + '<th>รวม</th></tr></thead>';
+  let head = '<thead><tr><th class="colhead-color">สี (โหล)</th>' + sumSizes.map(s=>`<th>${s}</th>`).join('') + '<th>รวม (โหล)</th><th>รวม (คู่)</th></tr></thead>';
   let grandTotals = sumSizes.map(() => 0);
   let grandAll = 0;
   let body = colorOrder.map(color => {
@@ -814,15 +851,58 @@ function renderColorSizeSummary(rows){
       const q = totals[color][s] || 0;
       grandTotals[i] += q;
       rowTotal += q;
-      return `<td>${q || ''}</td>`;
+      return `<td>${q ? dozText(q) : ''}</td>`;
     }).join('');
     grandAll += rowTotal;
-    return `<tr><td class="color-cell">${color}</td>${cells}<td class="row-total">${rowTotal}</td></tr>`;
+    return `<tr><td class="color-cell">${escH(color)}</td>${cells}<td class="row-total">${dozText(rowTotal)}</td><td class="row-total">${fmtNum(rowTotal)}</td></tr>`;
   }).join('');
-  body += `<tr><td class="color-cell">รวมทั้งหมด</td>${grandTotals.map(q=>`<td class="row-total">${q}</td>`).join('')}<td class="row-total">${grandAll}</td></tr>`;
-
+  body += `<tr><td class="color-cell">รวมทั้งหมด</td>${grandTotals.map(q=>`<td class="row-total">${q ? dozText(q) : ''}</td>`).join('')}<td class="row-total">${dozText(grandAll)}</td><td class="row-total">${fmtNum(grandAll)}</td></tr>`;
   container.innerHTML = `<table><tbody></tbody></table>`;
   container.querySelector('table').innerHTML = head + '<tbody>' + body + '</tbody>';
+}
+
+let countedRows = [];
+function renderCountTable(rows){
+  const listContainer = document.getElementById('stockCountedList');
+  const sumEl = document.getElementById('countTableSummary');
+  if(!rows.length){
+    listContainer.innerHTML = '<div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div>';
+    sumEl.textContent = '';
+    return;
+  }
+  let grand = 0;
+  let body = '';
+  rows.forEach((r, idx) => {
+    const n = r.items.length || 1;
+    r.items.forEach((it, j) => {
+      grand += Number(it.qty);
+      body += '<tr>';
+      if(j === 0){
+        body += `<td rowspan="${n}" style="font-weight:800; text-align:center;">${idx + 1}</td>`;
+        body += `<td rowspan="${n}"><span class="id-box" style="font-size:.78rem;">${escH(r.boxId)}</span></td>`;
+      }
+      body += `<td>${escH(it.color)}</td><td>${escH(it.size)}</td><td style="text-align:right;">${dozText(it.qty)}</td><td style="text-align:right;">${fmtNum(it.qty)}</td>`;
+      if(j === 0) body += `<td rowspan="${n}"><button class="btn btn-ghost uncount-btn" data-box="${escH(r.boxId)}" style="padding:4px 8px; font-size:.75rem;">ยกเลิก</button></td>`;
+      body += '</tr>';
+    });
+  });
+  body += `<tr style="font-weight:800;"><td colspan="4" style="text-align:right;">รวมทั้งหมด</td><td style="text-align:right;">${dozText(grand)}</td><td style="text-align:right;">${fmtNum(grand)}</td><td></td></tr>`;
+  listContainer.innerHTML = `<table><thead><tr><th>ถังที่</th><th>รหัสกล่อง</th><th>สี</th><th>เบอร์</th><th>จำนวน (โหล)</th><th>จำนวน (คู่)</th><th></th></tr></thead><tbody>${body}</tbody></table>`;
+  sumEl.textContent = `— นับแล้ว ${rows.length} ถัง · รวม ${dozFull(grand)} (${fmtNum(grand)} คู่)`;
+  listContainer.querySelectorAll('.uncount-btn').forEach(b => b.addEventListener('click', () => uncountBox(b.dataset.box)));
+  listContainer.scrollTop = listContainer.scrollHeight;
+}
+async function uncountBox(boxId){
+  const sessionId = document.getElementById('countSessionInput').value.trim();
+  if(!confirm(`ยกเลิกการนับกล่อง ${boxId} ในรอบนี้? (ข้อมูลกล่องในระบบไม่ถูกลบ ยิงนับใหม่ได้)`)) return;
+  try{
+    const r = await callBackend({ action:'uncount', sessionId, boxId });
+    if(!r.ok) throw new Error('ไม่พบรายการที่นับไว้');
+    document.getElementById('stockScanResultArea').innerHTML = `<div class="status ok" style="margin-top:14px;">ยกเลิกการนับกล่อง ${escH(boxId)} แล้ว</div>`;
+  }catch(e){
+    alert('ยกเลิกไม่สำเร็จ: ' + e.message);
+  }
+  loadCountedList();
 }
 
 async function loadCountedList(){
@@ -830,25 +910,16 @@ async function loadCountedList(){
   const listContainer = document.getElementById('stockCountedList');
   const summaryContainer = document.getElementById('stockColorSizeSummary');
   if(!sessionId){
+    countedRows = [];
     listContainer.innerHTML = '<div class="empty">ยังไม่ได้ตั้งรหัสรอบนับ</div>';
     summaryContainer.innerHTML = '<div class="empty">ยังไม่มีข้อมูลสรุป</div>';
     return;
   }
   try{
     const result = await callBackend({ action:'countList', sessionId });
-    const rows = result.rows || [];
-    renderColorSizeSummary(rows);
-    if(rows.length === 0){ listContainer.innerHTML = '<div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div>'; return; }
-    listContainer.innerHTML = rows.map(r => `
-      <div class="result-card" style="margin-top:10px; padding:12px 16px;">
-        <div style="flex:1;">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span class="id-box">${r.boxId}</span>
-            <span class="hint" style="margin-top:0;">${r.scannedAt}</span>
-          </div>
-          ${itemsTableHtml(r.items)}
-        </div>
-      </div>`).join('');
+    countedRows = result.rows || [];
+    renderColorSizeSummary(countedRows);
+    renderCountTable(countedRows);
   }catch(e){
     listContainer.innerHTML = '<div class="empty">โหลดรายการไม่สำเร็จ</div>';
   }
@@ -873,7 +944,7 @@ async function performCountScan(boxId){
       resultArea.innerHTML = `
         <div class="result-card" style="margin-top:16px;">
           <div style="flex:1;">
-            <div class="status ok" style="margin-top:0;">นับกล่อง ${boxId} เรียบร้อย บันทึกลง Google Sheet แล้ว</div>
+            <div class="status ok" style="margin-top:0;">นับถังที่ ${countedRows.length + 1} (${escH(boxId)}) เรียบร้อย บันทึกลง Google Sheet แล้ว</div>
             ${itemsTableHtml(result.items)}
           </div>
         </div>`;
@@ -884,12 +955,87 @@ async function performCountScan(boxId){
   }
 }
 
+// ---- นับทีละถัง: ยิง QR -> เห็นรายการในถัง -> กด "รับนับสต็อก" -> ลงตาราง ----
+let pendingBox = null;   // กล่องที่ยิงแล้วแต่ยังไม่กดรับนับ
+let countBusy = false;
+const countConfirmChk = document.getElementById('countConfirmChk');
+countConfirmChk.checked = localStorage.getItem('boxqr_count_confirm') !== '0';
+countConfirmChk.addEventListener('change', () => localStorage.setItem('boxqr_count_confirm', countConfirmChk.checked ? '1' : '0'));
+
+async function handleScanForCount(boxId){
+  if(countBusy) return;
+  if(!countConfirmChk.checked){
+    countBusy = true;
+    try{ await performCountScan(boxId); } finally { countBusy = false; }
+    return;
+  }
+  await previewCountBox(boxId);
+}
+async function previewCountBox(boxId){
+  const area = document.getElementById('stockScanResultArea');
+  const sessionId = document.getElementById('countSessionInput').value.trim();
+  if(!sessionId){ area.innerHTML = '<div class="status err" style="margin-top:14px;">กรุณาตั้งรหัสรอบนับก่อนเริ่มยิง</div>'; return; }
+  const dupIdx = countedRows.findIndex(r => r.boxId === boxId);
+  if(dupIdx >= 0){
+    pendingBox = null;
+    area.innerHTML = `<div class="status err" style="margin-top:14px;">กล่อง ${escH(boxId)} ถูกนับไปแล้วเป็นถังที่ ${dupIdx + 1} — ไม่นับซ้ำ</div>`;
+    return;
+  }
+  countBusy = true;
+  area.innerHTML = '<div class="status">กำลังดึงรายการในถัง...</div>';
+  try{
+    const r = await callBackend({ action:'get', boxId });
+    if(!r.found){
+      pendingBox = null;
+      area.innerHTML = `<div class="status err" style="margin-top:14px;">ไม่พบข้อมูลกล่องรหัส "${escH(boxId)}" ในระบบ</div>`;
+      return;
+    }
+    pendingBox = r;
+    const tripParts = [];
+    if(r.tripNo) tripParts.push('เที่ยว ' + r.tripNo);
+    if(r.receiptDate) tripParts.push('วันที่รับ ' + r.receiptDate);
+    area.innerHTML = `
+      <div class="result-card" style="margin-top:16px; display:block; border-color:var(--amber);">
+        <div style="font-weight:800; font-size:1.05rem;">ถังที่ ${countedRows.length + 1} <span class="id-box" style="font-size:.85rem;">${escH(r.boxId)}</span></div>
+        ${tripParts.length ? `<div class="hint" style="margin-top:2px;">${tripParts.join(' · ')}</div>` : ''}
+        ${itemsTableHtml(r.items)}
+        <div class="btn-row">
+          <button class="btn btn-primary" id="countConfirmBtn">✅ รับนับสต็อก (ถังที่ ${countedRows.length + 1})</button>
+          <button class="btn btn-ghost" id="countCancelBtn">ไม่นับ / ยิงถังอื่น</button>
+        </div>
+      </div>`;
+    document.getElementById('countConfirmBtn').addEventListener('click', confirmPendingCount);
+    document.getElementById('countCancelBtn').addEventListener('click', cancelPendingCount);
+    if(navigator.vibrate) navigator.vibrate(60);
+  }catch(e){
+    pendingBox = null;
+    area.innerHTML = `<div class="status err" style="margin-top:14px;">เชื่อมต่อไม่สำเร็จ: ${escH(e.message)}</div>`;
+  }finally{
+    countBusy = false;
+  }
+}
+async function confirmPendingCount(){
+  if(!pendingBox || countBusy) return;
+  const boxId = pendingBox.boxId;
+  countBusy = true;
+  const btn = document.getElementById('countConfirmBtn');
+  if(btn) btn.disabled = true;
+  try{ await performCountScan(boxId); }
+  finally{ pendingBox = null; countBusy = false; stockScanInput.focus(); }
+}
+function cancelPendingCount(){
+  pendingBox = null;
+  document.getElementById('stockScanResultArea').innerHTML = '';
+  stockScanInput.focus();
+}
+
 const stockScanInput = document.getElementById('stockScanInput');
 stockScanInput.addEventListener('keydown', (e) => {
-  if(e.key !== 'Enter' || !stockScanInput.value.trim()) return;
-  const boxId = stockScanInput.value.trim();
+  if(e.key !== 'Enter') return;
+  const v = stockScanInput.value.trim();
+  if(!v){ if(pendingBox) confirmPendingCount(); return; } // Enter เปล่า = รับนับถังที่แสดงอยู่
   stockScanInput.value = '';
-  performCountScan(boxId);
+  handleScanForCount(extractBoxIdFromText(v));
 });
 
 // ---------- in-app camera scanner (no need to switch to LINE) ----------
@@ -908,6 +1054,10 @@ function extractBoxIdFromText(text){
 }
 
 async function startCamera(){
+  if(/Line\//i.test(navigator.userAgent)){
+    document.getElementById('stockScanResultArea').innerHTML =
+      '<div class="status err" style="margin-top:14px;">ตอนนี้เปิดอยู่ในแอป LINE ซึ่งมักเปิดกล้องไม่ได้ — กดเมนู ⋮ มุมขวาบน เลือก "เปิดในเบราว์เซอร์/Open in Chrome" แล้วลองใหม่</div>';
+  }
   const video = document.getElementById('camVideo');
   const wrap = document.getElementById('camWrap');
   const statusEl = document.getElementById('camStatus');
@@ -947,16 +1097,16 @@ function camScanLoop(){
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, canvas.width, canvas.height);
-      if(code && code.data){
+      if(code && code.data && !pendingBox && !countBusy){
         const now = Date.now();
         if(code.data !== lastCamCode || now - lastCamTime > 2500){
           lastCamCode = code.data;
           lastCamTime = now;
           const boxId = extractBoxIdFromText(code.data);
-          statusEl.textContent = 'จับได้: ' + boxId + ' — กำลังบันทึก...';
+          statusEl.textContent = 'จับได้: ' + boxId;
           if(navigator.vibrate) navigator.vibrate(80);
-          performCountScan(boxId).then(() => {
-            statusEl.textContent = 'เล็งกล้องไปที่ QR กล่องถัดไป';
+          handleScanForCount(boxId).then(() => {
+            statusEl.textContent = pendingBox ? 'ตรวจรายการแล้วกด "รับนับสต็อก" ด้านล่าง' : 'เล็งกล้องไปที่ QR กล่องถัดไป';
           });
         }
       }
@@ -1005,7 +1155,33 @@ async function loadHistory(){
 function updateBatchPrintCount(){
   const n = document.querySelectorAll('.history-check:checked').length;
   document.getElementById('batchPrintCount').textContent = n;
+  document.getElementById('batchDeleteCount').textContent = n;
 }
+document.getElementById('selectAllBtn').addEventListener('click', () => {
+  const boxes = document.querySelectorAll('.history-check');
+  const allOn = Array.from(boxes).every(b => b.checked);
+  boxes.forEach(b => b.checked = !allOn);
+  updateBatchPrintCount();
+});
+async function deleteBoxesFlow(ids){
+  if(!ids.length) return false;
+  const msg = ids.length === 1
+    ? `ลบกล่อง ${ids[0]} ออกจากระบบ?`
+    : `ลบ ${ids.length} กล่องออกจากระบบ?`;
+  if(!confirm(msg + '\n\n• ลบแล้วกู้คืนไม่ได้ ป้าย QR ที่แปะไว้จะสแกนไม่เจอข้อมูลอีก\n• ประวัติการลบเก็บไว้ในชีท StockMovement\n• ข้อมูลที่เคยยิงนับไว้แล้วไม่ถูกลบ')) return false;
+  try{
+    const r = await callBackend({ action:'deleteBoxes', boxIds: ids, by: localStorage.getItem('boxqr_cut_by') || '' });
+    if(!r.ok) throw new Error(r.error || 'ลบไม่สำเร็จ');
+    return true;
+  }catch(e){
+    alert('ลบไม่สำเร็จ: ' + e.message);
+    return false;
+  }
+}
+document.getElementById('batchDeleteBtn').addEventListener('click', async () => {
+  const ids = Array.from(document.querySelectorAll('.history-check:checked')).map(el => el.value);
+  if(await deleteBoxesFlow(ids)) loadHistory();
+});
 document.getElementById('batchLabelSizeSelect').value = getLabelSizeKey();
 document.getElementById('batchLabelSizeSelect').addEventListener('change', (e) => {
   localStorage.setItem('boxqr_label_size', e.target.value);
@@ -1048,6 +1224,7 @@ async function openHistoryDetail(boxId){
           <option value="a4">A4 (ปกติ)</option>
         </select>
         <button class="btn btn-primary" id="historyReprintBtn">พิมพ์ป้ายซ้ำ</button>
+        <button class="btn btn-ghost" id="historyDeleteBtn" style="color:var(--danger); border-color:var(--danger);">🗑 ลบกล่องนี้</button>
       </div>`;
     drawQr('historyQr', boxUrl(result.boxId));
     document.getElementById('historyLabelSizeSelect').value = getLabelSizeKey();
@@ -1056,6 +1233,12 @@ async function openHistoryDetail(boxId){
     });
     document.getElementById('historyReprintBtn').addEventListener('click', () => {
       printLabels([result.boxId]);
+    });
+    document.getElementById('historyDeleteBtn').addEventListener('click', async () => {
+      if(await deleteBoxesFlow([result.boxId])){
+        document.getElementById('historyModal').classList.remove('show');
+        loadHistory();
+      }
     });
   }catch(e){
     body.innerHTML = `<div class="status err">โหลดข้อมูลกล่อง "${boxId}" ไม่สำเร็จ</div>`;
@@ -1091,7 +1274,7 @@ function renderCutForm(){
   if(r.tripNo) trip.push('เที่ยว ' + r.tripNo);
   if(r.receiptDate) trip.push('วันที่รับ ' + r.receiptDate);
   const rows = r.items.map((it,i) => `<tr>
-      <td>${escH(it.color)}</td><td>${escH(it.size)}</td><td>${it.qty}</td>
+      <td>${escH(it.color)}</td><td>${escH(it.size)}</td><td>${fmtNum(it.qty)} คู่ <span class="hint">(${dozFull(it.qty)})</span></td>
       <td><input type="number" class="cut-qty" data-i="${i}" data-max="${it.qty}" min="0" max="${it.qty}" placeholder="0" style="width:90px;"></td>
       <td class="cut-after" data-i="${i}">${it.qty}</td></tr>`).join('');
   const reasons = ['เบิกขาย/ส่งออก','เบิกไปเติมหน้าร้าน','ของเสีย/ชำรุด','แก้ไขยอดที่กรอกผิด','อื่นๆ'];
@@ -1100,7 +1283,7 @@ function renderCutForm(){
       <div class="id-box">${escH(r.boxId)}</div>
       ${trip.length ? `<div class="hint" style="margin-top:6px;">${trip.join(' · ')}</div>` : ''}
       <div class="table-scroll"><table style="margin-top:10px;">
-        <thead><tr><th>สี</th><th>เบอร์</th><th>คงเหลือ</th><th>ตัดออก</th><th>เหลือหลังตัด</th></tr></thead>
+        <thead><tr><th>สี</th><th>เบอร์</th><th>คงเหลือ</th><th>ตัดออก (คู่)</th><th>เหลือหลังตัด (คู่)</th></tr></thead>
         <tbody>${rows}</tbody></table></div>
       <div class="total-line" id="cutTotalLine"></div>
       <div class="field-row" style="margin-top:12px;">
@@ -1138,7 +1321,7 @@ function updateCutPreview(){
     document.querySelector(`#cutBoxArea .cut-after[data-i="${inp.dataset.i}"]`).textContent = over ? '—' : after;
     if(!over){ totalCut += v; totalAfter += after; } else { totalAfter += max; }
   });
-  document.getElementById('cutTotalLine').textContent = `ตัดออกรวม ${totalCut} คู่ · คงเหลือในกล่อง ${totalAfter} คู่`;
+  document.getElementById('cutTotalLine').textContent = `ตัดออกรวม ${fmtNum(totalCut)} คู่ (${dozFull(totalCut)}) · คงเหลือในกล่อง ${fmtNum(totalAfter)} คู่ (${dozFull(totalAfter)})`;
 }
 async function submitCut(){
   const st = document.getElementById('cutStatus');
@@ -1347,16 +1530,16 @@ document.getElementById('exportAcctBtn').addEventListener('click', async () => {
   st.textContent = 'กำลังเตรียมไฟล์...'; st.className = 'status';
   try{
     const [cl, dump] = await Promise.all([ callBackend({ action:'countList', sessionId }), callBackend({ action:'dump' }) ]);
-    const counted = (cl.rows || []).slice().sort((a,b) => String(a.boxId).localeCompare(String(b.boxId)));
+    const counted = (cl.rows || []).slice(); // เรียงตามลำดับที่นับ = ถังที่ 1, 2, 3 …
     const dumpRows = dump.rows || [];
     const tripByBox = {};
     dumpRows.forEach(r => { if(r.tripNo) tripByBox[r.boxId] = r.tripNo; });
     const dz = q => Number((Number(q)/12).toFixed(2));
 
     // ชีท 1: รายกล่อง
-    const a1 = [['รหัสกล่อง','เที่ยว','สี','เบอร์','จำนวน (คู่)','จำนวน (โหล)','เวลายิงนับ','ผลตรวจบัญชี (✓/✗)','จำนวนที่นับได้จริง','หมายเหตุ']];
-    counted.forEach(r => r.items.forEach(it => {
-      a1.push([r.boxId, tripByBox[r.boxId] || '', it.color, it.size, Number(it.qty), dz(it.qty), r.scannedAt, '', '', '']);
+    const a1 = [['ถังที่','รหัสกล่อง','เที่ยว','สี','เบอร์','จำนวน (คู่)','จำนวน (โหล)','เวลายิงนับ','ผลตรวจบัญชี (✓/✗)','จำนวนที่นับได้จริง','หมายเหตุ']];
+    counted.forEach((r, ci) => r.items.forEach(it => {
+      a1.push([ci + 1, r.boxId, tripByBox[r.boxId] || '', it.color, it.size, Number(it.qty), dz(it.qty), r.scannedAt, '', '', '']);
     }));
 
     // ชีท 2: สรุปสี × เบอร์
@@ -1406,7 +1589,7 @@ function activateTab(tabName){
   if(tabName === 'pack') syncQuickColors();
   if(tabName === 'scan') scanInput.focus();
   if(tabName === 'cut'){ loadCutLog(); cutScanInput.focus(); }
-  if(tabName === 'stockcount'){ loadCountedList(); stockScanInput.focus(); }
+  if(tabName === 'stockcount'){ syncCountSession(); stockScanInput.focus(); }
   else { stopCamera(); }
 }
 document.querySelectorAll('.tab-btn').forEach(btn => {
