@@ -247,7 +247,7 @@
   <div class="panel" id="panel-stockcount">
     <div class="trip-bar">
       <div class="hint" style="margin-top:0; margin-bottom:8px; font-weight:600;">รอบนับสต็อค (ตั้งครั้งเดียวต่อรอบ กันยิงกล่องซ้ำในรอบเดียวกัน)</div>
-      <div class="hint" style="margin-top:0; margin-bottom:8px;">การนับสต็อคทำได้เฉพาะตอนเปิดแอพเข้ามาที่เมนูนี้เอง (กดปุ่มกล้อง หรือยิงด้วย handheld ในช่องด้านล่าง) ยิง QR จาก LINE จะไม่นับให้ไม่ว่ากรณีใด</div>
+      <div class="hint" style="margin-top:0; margin-bottom:8px;">นับได้ 3 ทาง: (1) กดปุ่มกล้องในหน้านี้ (2) ยิงด้วย handheld ในช่องด้านล่าง (3) สแกน QR ด้วย LINE แล้วกดปุ่ม "รับนับสต็อก" ในหน้าที่เปิดขึ้น — การสแกนอย่างเดียวจะไม่นับ ต้องกดปุ่มยืนยันเสมอ และปุ่มจะโผล่เมื่อมีรอบนับที่เปิดอยู่เท่านั้น</div>
       <div class="field-row" style="margin-bottom:0;">
         <div style="flex:1;">
           <label>รหัสรอบนับ</label>
@@ -258,6 +258,7 @@
           <input type="text" id="countDateInput" placeholder="เช่น 18/9/2569">
         </div>
         <button class="btn btn-ghost" id="genSessionBtn">เริ่มรอบใหม่</button>
+        <button class="btn btn-ghost" id="endSessionBtn" title="ปิดรอบนับ — ปุ่มรับนับใน LINE จะไม่ขึ้นอีก">จบรอบนับ</button>
       </div>
     </div>
 
@@ -746,26 +747,64 @@ document.getElementById('excelFileInput').addEventListener('change', (e) => {
 async function lookupBox(boxId, container){
   container.innerHTML = '<div class="status">กำลังค้นหา...</div>';
   try{
-    const result = await callBackend({ action:'get', boxId });
+    const [result, sess] = await Promise.all([
+      callBackend({ action:'get', boxId }),
+      callBackend({ action:'getSession' }).catch(() => ({}))
+    ]);
     if(!result.found) throw new Error('not found');
     const tripParts = [];
     if(result.tripNo) tripParts.push('เที่ยว ' + result.tripNo);
     if(result.receiptDate) tripParts.push('วันที่รับ ' + result.receiptDate);
     if(result.factoryBarcode) tripParts.push('ใบรับของ ' + result.factoryBarcode);
+    const hasSession = sess && sess.sessionId;
+    const countHtml = hasSession ? `
+      <div class="result-card" style="margin-top:12px; display:block; border-color:var(--amber);">
+        <div style="font-weight:700;">รอบนับสต็อก: ${escH(sess.sessionId)}${sess.countDate ? ' · ' + escH(sess.countDate) : ''}</div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="lineCountBtn">✅ รับนับสต็อก</button>
+          <button class="btn btn-ghost" id="lineViewTableBtn">ดูตารางที่นับแล้ว</button>
+        </div>
+        <div id="lineCountResult"></div>
+        <div class="hint">สแกนดูอย่างเดียวจะไม่นับ — นับก็ต่อเมื่อกดปุ่มนี้เท่านั้น</div>
+      </div>` : `<div class="hint" style="margin-top:12px;">ตอนนี้ไม่มีรอบนับสต็อกที่เปิดอยู่ — หน้านี้ดูรายละเอียดได้อย่างเดียว (หัวหน้าเริ่มรอบนับที่เมนู 2)</div>`;
     container.innerHTML = `
       <div class="result-card" style="margin-top:16px;">
         <div class="qr-block">
           <div id="scanQr"></div>
-          <div class="id-box" style="margin-top:8px;">${result.boxId}</div>
+          <div class="id-box" style="margin-top:8px;">${escH(result.boxId)}</div>
         </div>
         <div style="flex:1; min-width:200px;">
           ${tripParts.length ? `<div class="hint" style="margin-top:0;">${tripParts.join(' · ')}</div>` : ''}
           ${itemsTableHtml(result.items)}
         </div>
-      </div>`;
+      </div>${countHtml}`;
     drawQr('scanQr', boxUrl(result.boxId));
+    if(hasSession){
+      document.getElementById('lineViewTableBtn').addEventListener('click', () => activateTab('stockcount'));
+      document.getElementById('lineCountBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('lineCountBtn');
+        const out = document.getElementById('lineCountResult');
+        btn.disabled = true;
+        out.innerHTML = '<div class="status">กำลังบันทึก...</div>';
+        try{
+          const r = await callBackend({ action:'scanCount', sessionId: sess.sessionId, boxId: result.boxId, countDate: sess.countDate || '' });
+          const total = result.items.reduce((s, it) => s + Number(it.qty), 0);
+          if(r.duplicate){
+            out.innerHTML = `<div class="status err">กล่องนี้ถูกนับไปแล้วเป็นถังที่ ${r.seq || ''} — ไม่นับซ้ำ</div>`;
+          }else if(!r.found){
+            out.innerHTML = '<div class="status err">ไม่พบข้อมูลกล่องนี้ในระบบ</div>';
+            btn.disabled = false;
+          }else{
+            out.innerHTML = `<div class="status ok">✅ นับเป็นถังที่ ${r.seq} แล้ว (${dozFull(total)} = ${fmtNum(total)} คู่) — กด ✕ ปิดหน้านี้ แล้วสแกนถังถัดไปใน LINE</div>`;
+          }
+        }catch(err){
+          out.innerHTML = `<div class="status err">เชื่อมต่อไม่สำเร็จ: ${escH(err.message)} — ลองกดอีกครั้ง</div>`;
+          btn.disabled = false;
+        }
+      });
+    }
   }catch(e){
-    container.innerHTML = `<div class="status err" style="margin-top:14px;">ไม่พบข้อมูลกล่องรหัส "${boxId}" หรือเชื่อมต่อไม่สำเร็จ</div>`;
+    container.innerHTML = `<div class="status err" style="margin-top:14px;">ไม่พบข้อมูลกล่องรหัส "${escH(boxId)}" หรือเชื่อมต่อไม่สำเร็จ</div>`;
   }
 }
 const scanInput = document.getElementById('scanInput');
@@ -815,7 +854,7 @@ function pushCountSession(){
 async function syncCountSession(){
   try{
     const r = await callBackend({ action:'getSession' });
-    if(r.sessionId){
+    if(r && typeof r.sessionId === 'string'){ // เซิร์ฟเวอร์เป็นตัวตัดสินรอบนับ (ว่าง = ไม่มีรอบเปิดอยู่)
       document.getElementById('countSessionInput').value = r.sessionId;
       document.getElementById('countDateInput').value = r.countDate || '';
       localStorage.setItem('boxqr_count_session', r.sessionId);
@@ -824,6 +863,15 @@ async function syncCountSession(){
   }catch(e){ /* ใช้ค่าที่จำไว้ในเครื่อง */ }
   loadCountedList();
 }
+document.getElementById('endSessionBtn').addEventListener('click', async () => {
+  if(!confirm('จบรอบนับนี้? ปุ่ม "รับนับสต็อก" ที่เปิดจาก LINE จะไม่ขึ้นอีกจนกว่าจะเริ่มรอบใหม่ (ข้อมูลที่นับแล้วยังอยู่ในชีท StockCount)')) return;
+  document.getElementById('countSessionInput').value = '';
+  document.getElementById('countDateInput').value = '';
+  localStorage.setItem('boxqr_count_session', '');
+  localStorage.setItem('boxqr_count_date', '');
+  try{ await callBackend({ action:'setSession', sessionId:'', countDate:'' }); }catch(e){ alert('ปิดรอบบนเซิร์ฟเวอร์ไม่สำเร็จ ลองอีกครั้ง'); }
+  loadCountedList();
+});
 document.getElementById('countSessionInput').addEventListener('change', pushCountSession);
 document.getElementById('countDateInput').addEventListener('change', pushCountSession);
 document.getElementById('genSessionBtn').addEventListener('click', () => setTimeout(pushCountSession, 0));
@@ -945,7 +993,7 @@ async function performCountScan(boxId){
       resultArea.innerHTML = `
         <div class="result-card" style="margin-top:16px;">
           <div style="flex:1;">
-            <div class="status ok" style="margin-top:0;">นับถังที่ ${countedRows.length + 1} (${escH(boxId)}) เรียบร้อย บันทึกลง Google Sheet แล้ว</div>
+            <div class="status ok" style="margin-top:0;">นับถังที่ ${result.seq || (countedRows.length + 1)} (${escH(boxId)}) เรียบร้อย บันทึกลง Google Sheet แล้ว</div>
             ${itemsTableHtml(result.items)}
           </div>
         </div>`;
@@ -1660,7 +1708,7 @@ if('serviceWorker' in navigator){
 }
 
 // ---------- open straight to a box's details when scanned via LINE/camera ----------
-// ยิงจาก LINE ไม่ว่ากรณีใดจะแค่โชว์รายละเอียด — การนับสต็อคทำได้เฉพาะเปิดแอพเข้าเมนูนับสต็อคเองเท่านั้น
+// ยิงจาก LINE จะแสดงรายละเอียดก่อน — นับเข้ารอบได้เฉพาะเมื่อมีรอบนับเปิดอยู่ และผู้ใช้กดปุ่ม "รับนับสต็อก" เอง
 (function autoOpenFromUrl(){
   const params = new URLSearchParams(location.search);
   const boxId = params.get('box');
