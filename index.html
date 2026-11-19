@@ -204,6 +204,7 @@
       <input type="file" id="excelFileInput" class="file-hidden" accept=".xlsx,.xls">
     </div>
 
+    <div class="hint" style="margin-top:0; margin-bottom:6px;">กรอก <b>จำนวนเป็นโหล</b> ในช่องสี × เบอร์ที่มีสินค้า ช่องที่ไม่มีปล่อยว่าง (ไฟล์ Excel นำเข้าก็ใช้หน่วยโหลเหมือนกัน)</div>
     <div class="table-scroll"><table id="gridTable"></table></div>
     <button class="btn btn-ghost" id="addColorBtn">+ เพิ่มแถวสี</button>
 
@@ -355,7 +356,14 @@
 
 <script>
 const SIZES = ['8.5','9','9.5','10','10.5','11'];
-let colorRows = [{name:'ขาว'}, {name:'ดำ'}];
+const DEFAULT_QUICK_COLORS = ['น้ำเงิน','เขียว','แดง','เหลือง','ขาว','ดำ','เทา','ดำหน้าขาว'];
+function loadQuickColors(){
+  try{ const a = JSON.parse(localStorage.getItem('boxqr_quick_colors_v2') || 'null'); if(Array.isArray(a) && a.length) return a; }catch(e){}
+  return DEFAULT_QUICK_COLORS.slice();
+}
+function saveQuickColors(a){ localStorage.setItem('boxqr_quick_colors_v2', JSON.stringify(a)); }
+// ตารางกล่องผสม: มีแถวครบทุกสีให้อยู่แล้ว (ไม่ต้องพิมพ์ชื่อสี) กรอกเฉพาะช่องที่มีสินค้า
+let colorRows = loadQuickColors().map(n => ({ name:n, preset:true }));
 
 // ---------- backend config ----------
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby60u7VZFgZemkt-j94tb0S7j8kW7OcXXY-Hpk7_JP5Rx___qkMp3IJyZGehhM9vBOz/exec';
@@ -412,12 +420,12 @@ async function callBackend(payload){
 // ---------- grid entry ----------
 function renderGrid(){
   const tbl = document.getElementById('gridTable');
-  let head = '<thead><tr><th class="colhead-color">สี</th>' + SIZES.map(s=>`<th>${s}</th>`).join('') + '<th>รวม</th><th></th></tr></thead>';
+  let head = '<thead><tr><th class="colhead-color">สี</th>' + SIZES.map(s=>`<th>${s}</th>`).join('') + '<th>รวม (โหล)</th><th></th></tr></thead>';
   let body = '<tbody>';
   colorRows.forEach((row, i) => {
-    body += `<tr data-idx="${i}"><td class="color-cell"><input type="text" class="colorNameInput" value="${row.name}" placeholder="ชื่อสี"></td>`;
+    body += `<tr data-idx="${i}"><td class="color-cell"><input type="text" class="colorNameInput" value="${escH(row.name)}" placeholder="ชื่อสี"${row.preset ? ' readonly style="background:#eef1f3; font-weight:700;"' : ''}></td>`;
     SIZES.forEach(s => {
-      body += `<td><input type="number" class="grid-qty" data-size="${s}" min="0" placeholder="0"></td>`;
+      body += `<td><input type="number" class="grid-qty" data-size="${s}" min="0" step="any" inputmode="decimal" placeholder=""></td>`;
     });
     body += `<td class="row-total" data-rowtotal="0">0</td><td><button class="row-del" title="ลบแถว">✕</button></td></tr>`;
   });
@@ -437,8 +445,8 @@ function renderGrid(){
 function recomputeTotals(){
   document.querySelectorAll('#gridTable tbody tr').forEach(tr => {
     let sum = 0;
-    tr.querySelectorAll('.grid-qty').forEach(inp => { sum += parseInt(inp.value,10) || 0; });
-    tr.querySelector('.row-total').textContent = sum;
+    tr.querySelectorAll('.grid-qty').forEach(inp => { sum += parseFloat(inp.value) || 0; });
+    tr.querySelector('.row-total').textContent = sum ? Number(sum.toFixed(2)) : 0;
   });
 }
 document.getElementById('addColorBtn').addEventListener('click', () => {
@@ -466,7 +474,7 @@ function collectItemsFromGrid(){
     const color = tr.querySelector('.colorNameInput').value.trim();
     if(!color) return;
     tr.querySelectorAll('.grid-qty').forEach(inp => {
-      const qty = parseInt(inp.value,10) || 0;
+      const qty = Math.round((parseFloat(inp.value) || 0) * 12); // ช่องกรอกเป็นโหล -> เก็บเป็นคู่
       if(qty > 0){ items.push({color, size:inp.dataset.size, qty}); }
     });
   });
@@ -715,7 +723,7 @@ document.getElementById('excelFileInput').addEventListener('change', (e) => {
         SIZES.forEach((s, i) => {
           const col = sizeColIndex[i];
           if(col >= 0 && row[col] !== undefined && row[col] !== ''){
-            qty[s] = parseInt(row[col], 10) || 0;
+            qty[s] = parseFloat(row[col]) || 0; // ตัวเลขในไฟล์ = จำนวนโหล
           }
         });
         newRows.push({ name });
@@ -1479,12 +1487,7 @@ cutScanInput.addEventListener('keydown', (e) => {
 // ---------- quick entry mode (กรอกเร็ว: 1 กล่อง = 1 สี 1 เบอร์ กรอกเป็นโหล) ----------
 const QUICK_SIZES = SIZES;
 let quickColor = '', quickSize = '';
-const DEFAULT_QUICK_COLORS = ['น้ำเงิน','เขียว','แดง','เหลือง','ขาว','ดำ','เทา','ดำหน้าขาว'];
-function loadQuickColors(){
-  try{ const a = JSON.parse(localStorage.getItem('boxqr_quick_colors_v2') || 'null'); if(Array.isArray(a) && a.length) return a; }catch(e){}
-  return DEFAULT_QUICK_COLORS.slice();
-}
-function saveQuickColors(a){ localStorage.setItem('boxqr_quick_colors_v2', JSON.stringify(a)); }
+
 function renderQuickChips(){
   const cEl = document.getElementById('quickColors');
   cEl.innerHTML = '';
