@@ -92,6 +92,9 @@
     #printArea{position:absolute; top:0; left:0; width:100%; display:block !important;}
   }
   #printArea{display:none;}
+  .sheet-page{display:grid; grid-template-columns:repeat(4, 48.5mm); grid-auto-rows:40mm; width:194mm; page-break-after:always; break-after:page; border-top:0.3mm dashed #555; border-left:0.3mm dashed #555;}
+  .sheet-page:last-child{page-break-after:auto; break-after:auto;}
+  .sheet-page .label-block{page-break-after:auto; border-right:0.3mm dashed #555; border-bottom:0.3mm dashed #555; padding-top:2.5mm;}
   .chip-row{display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px;}
   .chip{padding:12px 18px; border:2px solid var(--steel-200); background:#fff; border-radius:8px; font-weight:700; font-size:1rem; cursor:pointer; font-family:var(--sans); color:var(--steel-900);}
   .chip.sel{background:var(--steel-700); border-color:var(--steel-700); color:#fff;}
@@ -179,6 +182,7 @@
           <option value="40x30">40 × 30 มม.</option>
           <option value="60x40">60 × 40 มม.</option>
           <option value="100x50">100 × 50 มม.</option>
+          <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
           <option value="a4">A4 (ปกติ)</option>
         </select>
         <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:600;"><input type="checkbox" id="quickAutoPrint" checked style="width:auto;"> พิมพ์ป้ายอัตโนมัติ</label>
@@ -208,7 +212,8 @@
             <option value="40x30">40 × 30 มม.</option>
             <option value="60x40">60 × 40 มม.</option>
             <option value="100x50">100 × 50 มม.</option>
-            <option value="a4">A4 (ปกติ)</option>
+            <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
+          <option value="a4">A4 (ปกติ)</option>
           </select>
           <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:600;"><input type="checkbox" id="bulkAutoPrint" checked style="width:auto;"> พิมพ์ป้ายอัตโนมัติหลังบันทึก</label>
         </div>
@@ -243,7 +248,8 @@
         <option value="40x30">40 × 30 มม.</option>
         <option value="60x40">60 × 40 มม.</option>
         <option value="100x50">100 × 50 มม.</option>
-        <option value="a4">A4 (ปกติ)</option>
+        <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
+          <option value="a4">A4 (ปกติ)</option>
       </select>
     </div>
     <div class="status" id="packStatus"></div>
@@ -343,7 +349,8 @@
         <option value="40x30">40 × 30 มม.</option>
         <option value="60x40">60 × 40 มม.</option>
         <option value="100x50">100 × 50 มม.</option>
-        <option value="a4">A4 (ปกติ)</option>
+        <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
+          <option value="a4">A4 (ปกติ)</option>
       </select>
       <button class="btn btn-primary" id="batchPrintBtn">พิมพ์ป้ายที่เลือก (<span id="batchPrintCount">0</span>)</button>
       <button class="btn btn-ghost" id="selectAllBtn">เลือกทั้งหมด</button>
@@ -516,7 +523,8 @@ const LABEL_SIZES = {
   '40x30': { w: 40, h: 30, qr: 19, font: 8, info: 7 },
   '60x40': { w: 60, h: 40, qr: 28, font: 10, info: 9 },
   '100x50': { w: 100, h: 50, qr: 34, font: 12, info: 11 },
-  'a4': { w: 210, h: 297, qr: 60, font: 16, info: 15 }
+  'a4': { w: 210, h: 297, qr: 60, font: 16, info: 15 },
+  'a4sheet': { w: 48.5, h: 40, qr: 26, font: 9, info: 8, sheet: true, cols: 4, rows: 7 }
 };
 function getLabelSizeKey(){ return localStorage.getItem('boxqr_label_size') || '50x30'; }
 document.getElementById('labelSizeSelect').value = getLabelSizeKey();
@@ -524,11 +532,12 @@ document.getElementById('labelSizeSelect').addEventListener('change', (e) => {
   localStorage.setItem('boxqr_label_size', e.target.value);
 });
 
-function applyLabelPageSize(){
-  const key = getLabelSizeKey();
+function applyLabelPageSize(keyOverride){
+  const key = keyOverride || getLabelSizeKey();
   const sz = LABEL_SIZES[key] || LABEL_SIZES['50x30'];
   document.getElementById('labelPageStyle').textContent =
-    key === 'a4' ? `@page{ size:A4; margin:12mm; }` : `@page{ size:${sz.w}mm ${sz.h}mm; margin:0mm; }`;
+    key === 'a4' ? `@page{ size:A4; margin:12mm; }` :
+    sz.sheet ? `@page{ size:A4; margin:8mm; }` : `@page{ size:${sz.w}mm ${sz.h}mm; margin:0mm; }`;
   return sz;
 }
 
@@ -597,7 +606,7 @@ function buildLabelBlock(boxId, sz, info){
 }
 
 // infoMap: { boxId: {tripNo, items:[{color,size,qty}]} } — ถ้าไม่ส่งมา/ไม่ครบ จะดึงจากชีทครั้งเดียว (action dump)
-async function printLabels(boxIds, infoMap){
+async function printLabels(boxIds, infoMap, sizeKey){
   infoMap = infoMap || {};
   if(boxIds.some(id => !infoMap[id])){
     try{
@@ -610,10 +619,20 @@ async function printLabels(boxIds, infoMap){
       boxIds.forEach(id => { if(!infoMap[id] && all[id]) infoMap[id] = all[id]; });
     }catch(e){ /* พิมพ์ได้แม้ไม่มีข้อความใต้ QR */ }
   }
-  const sz = applyLabelPageSize();
+  const sz = applyLabelPageSize(sizeKey);
   const area = document.getElementById('printArea');
   area.innerHTML = '';
-  boxIds.forEach(boxId => area.appendChild(buildLabelBlock(boxId, sz, infoMap[boxId])));
+  if(sz.sheet){
+    const per = sz.cols * sz.rows;
+    for(let i = 0; i < boxIds.length; i += per){
+      const page = document.createElement('div');
+      page.className = 'sheet-page';
+      boxIds.slice(i, i + per).forEach(boxId => page.appendChild(buildLabelBlock(boxId, sz, infoMap[boxId])));
+      area.appendChild(page);
+    }
+  }else{
+    boxIds.forEach(boxId => area.appendChild(buildLabelBlock(boxId, sz, infoMap[boxId])));
+  }
   await new Promise(r => setTimeout(r, 200));
   window.print();
 }
@@ -1361,6 +1380,7 @@ async function openHistoryDetail(boxId){
           <option value="40x30">40 × 30 มม.</option>
           <option value="60x40">60 × 40 มม.</option>
           <option value="100x50">100 × 50 มม.</option>
+          <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
           <option value="a4">A4 (ปกติ)</option>
         </select>
         <button class="btn btn-primary" id="historyReprintBtn">พิมพ์ป้ายซ้ำ</button>
@@ -1720,8 +1740,8 @@ document.getElementById('exportAcctBtn').addEventListener('click', async () => {
 const BULK_HEADER = ['ถังที่','เที่ยว','วันที่รับ','สี','เบอร์','จำนวน (โหล)','เศษ (คู่) ถ้ามี'];
 let bulkBoxes = [];
 let bulkFileKey = '';
-document.getElementById('bulkLabelSize').value = getLabelSizeKey();
-document.getElementById('bulkLabelSize').addEventListener('change', (e) => localStorage.setItem('boxqr_label_size', e.target.value));
+document.getElementById('bulkLabelSize').value = localStorage.getItem('boxqr_bulk_label_size') || 'a4sheet';
+document.getElementById('bulkLabelSize').addEventListener('change', (e) => localStorage.setItem('boxqr_bulk_label_size', e.target.value));
 
 document.getElementById('bulkTemplateBtn').addEventListener('click', () => {
   const rows = [
@@ -1874,9 +1894,9 @@ async function bulkSave(){
       <div class="btn-row" style="margin-top:0;"><button class="btn btn-primary" id="bulkReprintBtn">🖨 พิมพ์ป้าย ${ids.length} ใบอีกครั้ง</button></div>
       <div class="hint">ป้ายพิมพ์ตามลำดับในไฟล์ (กล่องที่ 1, 2, 3 …) ใต้ QR มี เที่ยว | สี | เบอร์ | จำนวน ให้เทียบกับป้ายโรงงานบนถังก่อนแปะ · พิมพ์ซ้ำภายหลังได้ที่เมนู 3 ประวัติกล่อง</div>
       <div class="table-scroll" style="max-height:50vh; overflow:auto;"><table><thead><tr><th>#</th><th>รหัสกล่อง</th><th>รายการ</th></tr></thead><tbody>${ids.map((id, i) => `<tr><td>${i + 1}</td><td><span class="id-box" style="font-size:.8rem;">${escH(id)}</span></td><td>${escH(labelInfoText(infoMap[id]))}</td></tr>`).join('')}</tbody></table></div>`;
-    document.getElementById('bulkReprintBtn').addEventListener('click', () => printLabels(ids, infoMap));
+    document.getElementById('bulkReprintBtn').addEventListener('click', () => printLabels(ids, infoMap, document.getElementById('bulkLabelSize').value));
     bulkBoxes = [];
-    if(document.getElementById('bulkAutoPrint').checked) await printLabels(ids, infoMap);
+    if(document.getElementById('bulkAutoPrint').checked) await printLabels(ids, infoMap, document.getElementById('bulkLabelSize').value);
   }catch(e){
     st.textContent = 'เกิดข้อผิดพลาด: ' + e.message; st.className = 'status err';
   }finally{
