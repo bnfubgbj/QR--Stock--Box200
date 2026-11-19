@@ -265,6 +265,7 @@
       <button class="btn btn-primary" id="camStartBtn">📷 เปิดกล้องสแกนต่อเนื่อง</button>
       <button class="btn btn-ghost" id="camStopBtn" style="display:none;">ปิดกล้อง</button>
     </div>
+    <div id="camMsg"></div>
     <div class="hint" id="camHint" style="margin-top:0; margin-bottom:8px;">ใช้บนมือถือได้: เปิดลิงก์แอปด้วย Chrome (Android) หรือ Safari (iPhone) แล้วกด "อนุญาต" กล้อง — อย่าเปิดจากในแอป LINE เพราะกล้องมักใช้ไม่ได้</div>
     <div class="cam-wrap" id="camWrap">
       <video id="camVideo" playsinline muted></video>
@@ -1054,29 +1055,58 @@ function extractBoxIdFromText(text){
 }
 
 async function startCamera(){
+  const msg = document.getElementById('camMsg');
+  const show = (t, cls) => { msg.innerHTML = t ? `<div class="status ${cls || ''}" style="margin:8px 0 12px;">${t}</div>` : ''; };
   if(/Line\//i.test(navigator.userAgent)){
-    document.getElementById('stockScanResultArea').innerHTML =
-      '<div class="status err" style="margin-top:14px;">ตอนนี้เปิดอยู่ในแอป LINE ซึ่งมักเปิดกล้องไม่ได้ — กดเมนู ⋮ มุมขวาบน เลือก "เปิดในเบราว์เซอร์/Open in Chrome" แล้วลองใหม่</div>';
+    show('ตอนนี้เปิดอยู่ในแอป LINE ซึ่งมักเปิดกล้องไม่ได้ — กดเมนู ⋮ มุมขวาบน เลือก "เปิดในเบราว์เซอร์/Open in Chrome" แล้วลองใหม่', 'err');
+    return;
   }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    show('เบราว์เซอร์นี้ใช้กล้องไม่ได้ — ต้องเปิดผ่าน https ด้วย Chrome / Safari / Edge รุ่นใหม่', 'err');
+    return;
+  }
+  try{
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    if(!devs.some(d => d.kind === 'videoinput')){
+      show('เครื่องนี้ไม่พบกล้อง (คอมพิวเตอร์ส่วนใหญ่ไม่มีกล้อง) — ให้ใช้มือถือเปิดแอปนี้ หรือใช้เครื่อง handheld ยิงในช่องด้านล่างแทน', 'err');
+      return;
+    }
+  }catch(e){ /* ตรวจรายการกล้องไม่ได้ ลองเปิดต่อไป */ }
+
   const video = document.getElementById('camVideo');
   const wrap = document.getElementById('camWrap');
-  const statusEl = document.getElementById('camStatus');
+  show('กำลังขอสิทธิ์ใช้กล้อง... ดูป๊อปอัปเล็ก ๆ ใกล้ช่องที่อยู่เว็บด้านบน แล้วกด "อนุญาต"');
+  const waitTimer = setTimeout(() => {
+    show('ยังรอสิทธิ์กล้องอยู่ — ถ้าไม่เห็นป๊อปอัป ให้กดไอคอนกล้อง/กุญแจข้างช่องที่อยู่เว็บ ตั้งเป็น "อนุญาต" แล้วรีเฟรชหน้า', 'err');
+  }, 6000);
   try{
-    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
+    try{ // ขอให้กล้องโฟกัสอัตโนมัติต่อเนื่อง (ถ้าเครื่องรองรับ) ช่วยให้ QR เล็ก ๆ ชัดขึ้น
+      const track = camStream.getVideoTracks()[0];
+      await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+    }catch(e){ /* เครื่องไม่รองรับ ใช้โฟกัสปกติ */ }
+    clearTimeout(waitTimer);
     video.srcObject = camStream;
     await video.play();
+    show('');
     wrap.classList.add('show');
     document.getElementById('camStartBtn').style.display = 'none';
     document.getElementById('camStopBtn').style.display = 'inline-block';
     camScanLoop();
   }catch(e){
-    document.getElementById('stockScanResultArea').innerHTML =
-      '<div class="status err" style="margin-top:14px;">เปิดกล้องไม่สำเร็จ: ' + e.message + ' (ต้องอนุญาตสิทธิ์กล้อง และเปิดผ่าน https)</div>';
+    clearTimeout(waitTimer);
+    const name = e && e.name;
+    let t = 'เปิดกล้องไม่สำเร็จ: ' + (e && e.message ? e.message : name);
+    if(name === 'NotAllowedError' || name === 'SecurityError') t = 'เบราว์เซอร์ไม่อนุญาตให้ใช้กล้อง — กดไอคอนกล้อง/กุญแจข้างช่องที่อยู่เว็บ ตั้งเป็น "อนุญาต" แล้วรีเฟรชหน้า';
+    else if(name === 'NotFoundError') t = 'ไม่พบกล้องในเครื่องนี้ — ใช้มือถือหรือ handheld แทน';
+    else if(name === 'NotReadableError') t = 'กล้องถูกใช้งานโดยโปรแกรมอื่นอยู่ (เช่น LINE, Teams, Zoom) — ปิดแล้วลองใหม่';
+    show(t, 'err');
   }
 }
 
 function stopCamera(){
-  if(camLoopId) cancelAnimationFrame(camLoopId);
+  const cm = document.getElementById('camMsg'); if(cm) cm.innerHTML = '';
+  if(camLoopId) clearTimeout(camLoopId);
   if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   document.getElementById('camWrap').classList.remove('show');
   document.getElementById('camStartBtn').style.display = 'inline-block';
@@ -1089,31 +1119,58 @@ function camScanLoop(){
   const statusEl = document.getElementById('camStatus');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-  function tick(){
-    if(!camStream) return;
-    if(video.readyState === video.HAVE_ENOUGH_DATA){
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, canvas.width, canvas.height);
-      if(code && code.data && !pendingBox && !countBusy){
-        const now = Date.now();
-        if(code.data !== lastCamCode || now - lastCamTime > 2500){
-          lastCamCode = code.data;
-          lastCamTime = now;
-          const boxId = extractBoxIdFromText(code.data);
-          statusEl.textContent = 'จับได้: ' + boxId;
-          if(navigator.vibrate) navigator.vibrate(80);
-          handleScanForCount(boxId).then(() => {
-            statusEl.textContent = pendingBox ? 'ตรวจรายการแล้วกด "รับนับสต็อก" ด้านล่าง' : 'เล็งกล้องไปที่ QR กล่องถัดไป';
-          });
-        }
-      }
-    }
-    camLoopId = requestAnimationFrame(tick);
+  // ใช้ตัวอ่าน QR ของเบราว์เซอร์ (เร็วและแม่นกว่า) ถ้ามี ไม่งั้นใช้ jsQR
+  let detector = null;
+  if('BarcodeDetector' in window){
+    try{ detector = new BarcodeDetector({ formats: ['qr_code'] }); }catch(e){ detector = null; }
   }
-  camLoopId = requestAnimationFrame(tick);
+  if(!detector && typeof jsQR !== 'function'){
+    statusEl.textContent = 'โหลดตัวอ่าน QR ไม่สำเร็จ (ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า)';
+    return;
+  }
+  statusEl.textContent = 'เล็ง QR ให้เต็มกรอบ ห่างประมาณ 15–25 ซม. ให้ชัด ไม่สะท้อนแสง';
+  let busyDetect = false;
+
+  async function readCode(){
+    if(detector){
+      const codes = await detector.detect(video);
+      return codes && codes.length ? codes[0].rawValue : null;
+    }
+    const maxW = 960;
+    const scale = Math.min(1, maxW / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const c = jsQR(imageData.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+    return c && c.data ? c.data : null;
+  }
+
+  async function tick(){
+    if(!camStream) return;
+    if(!busyDetect && !pendingBox && !countBusy && video.readyState >= 2 && video.videoWidth > 0){
+      busyDetect = true;
+      try{
+        const data = await readCode();
+        if(data){
+          const now = Date.now();
+          if(data !== lastCamCode || now - lastCamTime > 2500){
+            lastCamCode = data;
+            lastCamTime = now;
+            const boxId = extractBoxIdFromText(data);
+            statusEl.textContent = 'จับได้: ' + boxId;
+            if(navigator.vibrate) navigator.vibrate(80);
+            handleScanForCount(boxId).then(() => {
+              statusEl.textContent = pendingBox ? 'ตรวจรายการแล้วกด "รับนับสต็อก" ด้านล่าง' : 'เล็งกล้องไปที่ QR กล่องถัดไป';
+            });
+          }
+        }
+      }catch(err){ /* เฟรมนี้อ่านไม่ได้ ลองเฟรมถัดไป */ }
+      busyDetect = false;
+    }
+    if(camStream) camLoopId = setTimeout(tick, 150);
+  }
+  camLoopId = setTimeout(tick, 150);
 }
 
 document.getElementById('camStartBtn').addEventListener('click', startCamera);
