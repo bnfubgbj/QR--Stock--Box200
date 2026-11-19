@@ -116,6 +116,7 @@
     <button class="tab-btn active" data-tab="pack">1. รับของเข้า / สร้าง QR</button>
     <button class="tab-btn" data-tab="stockcount">2. นับสต็อค (ยิงไล่กล่อง)</button>
     <button class="tab-btn" data-tab="history">3. ประวัติกล่อง</button>
+    <button class="tab-btn" data-tab="cut">4. ตัดสต็อก</button>
   </div>
 
   <!-- PACK PANEL -->
@@ -230,6 +231,18 @@
     <div style="margin-top:20px;">
       <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">รายการกล่องที่นับแล้วในรอบนี้ (แยกตามกล่อง)</div>
       <div id="stockCountedList"><div class="empty">ยังไม่มีกล่องที่นับในรอบนี้</div></div>
+    </div>
+  </div>
+
+  <!-- CUT STOCK PANEL -->
+  <div class="panel" id="panel-cut">
+    <label>ยิง QR ที่กล่อง (handheld) หรือพิมพ์รหัสกล่อง</label>
+    <input type="text" id="cutScanInput" placeholder="รอรับข้อมูลจากเครื่องสแกน...">
+    <div class="hint">ใช้เมื่อของถูกเบิกออกจากกล่อง (บางส่วนหรือทั้งกล่อง) เพื่อให้ยอดในระบบตรงกับของจริง ทุกครั้งที่ตัดจะมีประวัติเก็บไว้ในชีท StockMovement</div>
+    <div id="cutBoxArea"></div>
+    <div style="margin-top:22px;">
+      <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">ประวัติการตัดสต็อกล่าสุด</div>
+      <div class="table-scroll" id="cutLogArea"><div class="empty">กำลังโหลด...</div></div>
     </div>
   </div>
 
@@ -951,12 +964,136 @@ document.getElementById('historyModalCloseBtn').addEventListener('click', () => 
   document.getElementById('historyModal').classList.remove('show');
 });
 
+// ---------- cut stock (ตัดสต็อกออกบางส่วน/ทั้งกล่อง) ----------
+let cutCurrentBox = null;
+const cutScanInput = document.getElementById('cutScanInput');
+function escH(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function loadCutBox(rawText){
+  const boxId = extractBoxIdFromText(rawText);
+  const area = document.getElementById('cutBoxArea');
+  area.innerHTML = '<div class="status">กำลังค้นหา...</div>';
+  try{
+    const r = await callBackend({ action:'get', boxId });
+    if(!r.found){ cutCurrentBox = null; area.innerHTML = `<div class="status err">ไม่พบกล่องรหัส "${escH(boxId)}" (อาจตัดหมดแล้ว หรือรหัสผิด)</div>`; return; }
+    cutCurrentBox = r;
+    renderCutForm();
+  }catch(e){
+    cutCurrentBox = null;
+    area.innerHTML = '<div class="status err">เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง</div>';
+  }
+}
+function renderCutForm(){
+  const r = cutCurrentBox;
+  const area = document.getElementById('cutBoxArea');
+  const trip = [];
+  if(r.tripNo) trip.push('เที่ยว ' + r.tripNo);
+  if(r.receiptDate) trip.push('วันที่รับ ' + r.receiptDate);
+  const rows = r.items.map((it,i) => `<tr>
+      <td>${escH(it.color)}</td><td>${escH(it.size)}</td><td>${it.qty}</td>
+      <td><input type="number" class="cut-qty" data-i="${i}" data-max="${it.qty}" min="0" max="${it.qty}" placeholder="0" style="width:90px;"></td>
+      <td class="cut-after" data-i="${i}">${it.qty}</td></tr>`).join('');
+  const reasons = ['เบิกขาย/ส่งออก','เบิกไปเติมหน้าร้าน','ของเสีย/ชำรุด','แก้ไขยอดที่กรอกผิด','อื่นๆ'];
+  area.innerHTML = `
+    <div class="result-card" style="margin-top:16px; display:block;">
+      <div class="id-box">${escH(r.boxId)}</div>
+      ${trip.length ? `<div class="hint" style="margin-top:6px;">${trip.join(' · ')}</div>` : ''}
+      <div class="table-scroll"><table style="margin-top:10px;">
+        <thead><tr><th>สี</th><th>เบอร์</th><th>คงเหลือ</th><th>ตัดออก</th><th>เหลือหลังตัด</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <div class="total-line" id="cutTotalLine"></div>
+      <div class="field-row" style="margin-top:12px;">
+        <div style="flex:1;"><label>เหตุผล</label>
+          <select id="cutReason">${reasons.map(x=>`<option>${x}</option>`).join('')}</select></div>
+        <div style="flex:1;"><label>ผู้ทำรายการ</label>
+          <input type="text" id="cutBy" placeholder="ชื่อ" value="${escH(localStorage.getItem('boxqr_cut_by')||'')}"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="cutConfirmBtn">ยืนยันตัดสต็อก</button>
+        <button class="btn btn-ghost" id="cutAllBtn">ตัดทั้งกล่อง (กรอกจำนวนทั้งหมดให้)</button>
+        <button class="btn btn-ghost" id="cutCancelBtn">ยกเลิก</button>
+      </div>
+      <div class="status" id="cutStatus"></div>
+    </div>`;
+  area.querySelectorAll('.cut-qty').forEach(inp => inp.addEventListener('input', updateCutPreview));
+  document.getElementById('cutAllBtn').addEventListener('click', () => {
+    area.querySelectorAll('.cut-qty').forEach(inp => inp.value = inp.dataset.max);
+    updateCutPreview();
+  });
+  document.getElementById('cutCancelBtn').addEventListener('click', () => {
+    cutCurrentBox = null; area.innerHTML = ''; cutScanInput.focus();
+  });
+  document.getElementById('cutConfirmBtn').addEventListener('click', submitCut);
+  updateCutPreview();
+}
+function updateCutPreview(){
+  let totalCut = 0, totalAfter = 0;
+  document.querySelectorAll('#cutBoxArea .cut-qty').forEach(inp => {
+    const max = Number(inp.dataset.max);
+    let v = Number(inp.value) || 0;
+    const over = v > max || v < 0;
+    inp.style.borderColor = over ? 'var(--danger)' : '';
+    const after = max - (over ? 0 : v);
+    document.querySelector(`#cutBoxArea .cut-after[data-i="${inp.dataset.i}"]`).textContent = over ? '—' : after;
+    if(!over){ totalCut += v; totalAfter += after; } else { totalAfter += max; }
+  });
+  document.getElementById('cutTotalLine').textContent = `ตัดออกรวม ${totalCut} คู่ · คงเหลือในกล่อง ${totalAfter} คู่`;
+}
+async function submitCut(){
+  const st = document.getElementById('cutStatus');
+  const items = [];
+  let bad = false;
+  document.querySelectorAll('#cutBoxArea .cut-qty').forEach(inp => {
+    const v = Number(inp.value) || 0;
+    const it = cutCurrentBox.items[Number(inp.dataset.i)];
+    if(v < 0 || v > Number(inp.dataset.max)) bad = true;
+    if(v > 0) items.push({ color: it.color, size: it.size, cut: v });
+  });
+  if(bad){ st.textContent = 'มีช่องที่ตัดเกินจำนวนคงเหลือ'; st.className = 'status err'; return; }
+  if(!items.length){ st.textContent = 'ยังไม่ได้กรอกจำนวนที่จะตัด'; st.className = 'status err'; return; }
+  const by = document.getElementById('cutBy').value.trim();
+  localStorage.setItem('boxqr_cut_by', by);
+  const totalCut = items.reduce((s,x)=>s+x.cut,0);
+  if(!confirm(`ยืนยันตัดสต็อกกล่อง ${cutCurrentBox.boxId} รวม ${totalCut} คู่ ?`)) return;
+  const btn = document.getElementById('cutConfirmBtn');
+  btn.disabled = true; st.textContent = 'กำลังบันทึก...'; st.className = 'status';
+  try{
+    const r = await callBackend({ action:'cut', boxId: cutCurrentBox.boxId, items, reason: document.getElementById('cutReason').value, by });
+    if(!r.ok) throw new Error(r.error || 'บันทึกไม่สำเร็จ');
+    const msg = r.emptied ? `ตัดครบแล้ว กล่อง ${cutCurrentBox.boxId} ว่าง (ไม่มีของเหลือ)` : `ตัดแล้ว ${totalCut} คู่ กล่อง ${cutCurrentBox.boxId} คงเหลือ ${r.remaining.reduce((s,x)=>s+Number(x.qty),0)} คู่`;
+    document.getElementById('cutBoxArea').innerHTML = `<div class="status ok" style="margin-top:14px;">${escH(msg)}</div>`;
+    cutCurrentBox = null;
+    loadCutLog();
+    cutScanInput.value = ''; cutScanInput.focus();
+  }catch(e){
+    btn.disabled = false; st.textContent = e.message; st.className = 'status err';
+  }
+}
+async function loadCutLog(){
+  const el = document.getElementById('cutLogArea');
+  try{
+    const r = await callBackend({ action:'cutLog', limit:30 });
+    if(!r.rows || !r.rows.length){ el.innerHTML = '<div class="empty">ยังไม่มีประวัติการตัดสต็อก</div>'; return; }
+    el.innerHTML = '<table><thead><tr><th>เวลา</th><th>กล่อง</th><th>สี</th><th>เบอร์</th><th>ตัด</th><th>เหลือ</th><th>เหตุผล</th><th>โดย</th></tr></thead><tbody>' +
+      r.rows.map(x => `<tr><td>${escH(x.time)}</td><td>${escH(x.boxId)}</td><td>${escH(x.color)}</td><td>${escH(x.size)}</td><td>${x.cut}</td><td>${x.after}</td><td>${escH(x.reason)}</td><td>${escH(x.by)}</td></tr>`).join('') + '</tbody></table>';
+  }catch(e){
+    el.innerHTML = '<div class="empty">โหลดประวัติไม่สำเร็จ</div>';
+  }
+}
+cutScanInput.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter' && cutScanInput.value.trim()){
+    loadCutBox(cutScanInput.value.trim());
+    cutScanInput.value = '';
+  }
+});
+
 // ---------- tabs ----------
 function activateTab(tabName){
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tabName));
   if(tabName === 'history') loadHistory();
   if(tabName === 'scan') scanInput.focus();
+  if(tabName === 'cut'){ loadCutLog(); cutScanInput.focus(); }
   if(tabName === 'stockcount'){ loadCountedList(); stockScanInput.focus(); }
   else { stopCamera(); }
 }
