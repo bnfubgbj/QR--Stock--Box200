@@ -92,6 +92,12 @@
     #printArea{position:absolute; top:0; left:0; width:100%; display:block !important;}
   }
   #printArea{display:none;}
+  .chip-row{display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px;}
+  .chip{padding:12px 18px; border:2px solid var(--steel-200); background:#fff; border-radius:8px; font-weight:700; font-size:1rem; cursor:pointer; font-family:var(--sans); color:var(--steel-900);}
+  .chip.sel{background:var(--steel-700); border-color:var(--steel-700); color:#fff;}
+  .quick-preview{background:#fff8ec; border:1px solid #f0d9ad; border-radius:8px; padding:10px 14px; font-weight:700; margin:10px 0;}
+  .recent-item{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--steel-100); border-radius:6px; margin-bottom:6px; font-size:.88rem;}
+  .label-block .lbl-info{font-weight:700; line-height:1.15; margin-top:0.3mm; white-space:nowrap; overflow:hidden;}
 </style>
 <style id="labelPageStyle"></style>
 </head>
@@ -139,6 +145,51 @@
       </div>
     </div>
 
+    <div class="btn-row" style="margin-top:0;">
+      <button class="btn btn-primary" id="modeQuickBtn">⚡ กรอกเร็ว (1 กล่อง = 1 สี 1 เบอร์)</button>
+      <button class="btn btn-ghost" id="modeDetailBtn">กล่องผสมหลายสี/หลายเบอร์</button>
+    </div>
+
+    <!-- QUICK MODE -->
+    <div id="quickMode">
+      <label>สี (กดเลือก)</label>
+      <div class="chip-row" id="quickColors"></div>
+      <div class="field-row" style="margin-bottom:6px;">
+        <input type="text" id="quickNewColor" placeholder="สีใหม่ที่ยังไม่มีปุ่ม">
+        <button class="btn btn-ghost" id="quickAddColorBtn">+ เพิ่มสี</button>
+      </div>
+      <label>เบอร์ (กดเลือก)</label>
+      <div class="chip-row" id="quickSizes"></div>
+      <div class="field-row">
+        <div style="flex:1;">
+          <label>จำนวน (โหล)</label>
+          <input type="number" id="quickDozen" min="0" step="1" inputmode="numeric" placeholder="เช่น 90">
+        </div>
+        <div style="flex:1;">
+          <label>เศษ (คู่) ถ้ามี</label>
+          <input type="number" id="quickExtra" min="0" max="11" step="1" inputmode="numeric" placeholder="0">
+        </div>
+      </div>
+      <div class="quick-preview" id="quickPreview">เลือกสี เบอร์ และใส่จำนวน</div>
+      <div class="btn-row" style="margin-top:0;">
+        <button class="btn btn-primary" id="quickSaveBtn">บันทึก + พิมพ์ป้าย</button>
+        <select id="quickLabelSize" style="width:auto;" title="ขนาดป้าย">
+          <option value="50x30">50 × 30 มม.</option>
+          <option value="40x30">40 × 30 มม.</option>
+          <option value="60x40">60 × 40 มม.</option>
+          <option value="100x50">100 × 50 มม.</option>
+          <option value="a4">A4 (ปกติ)</option>
+        </select>
+        <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:600;"><input type="checkbox" id="quickAutoPrint" checked style="width:auto;"> พิมพ์ป้ายอัตโนมัติ</label>
+      </div>
+      <div class="status" id="quickStatus"></div>
+      <div style="margin-top:14px;">
+        <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">บันทึกแล้ววันนี้ <span id="quickTodayCount">0</span> กล่อง (ล่าสุดอยู่บนสุด)</div>
+        <div id="quickRecent"></div>
+      </div>
+    </div>
+
+    <div id="detailMode" style="display:none;">
     <div class="field-row">
       <div style="flex:1">
         <label>รหัสกล่อง (เว้นว่างไว้ให้ระบบสร้างให้)</label>
@@ -181,6 +232,7 @@
         <div class="total-line" id="totalLine"></div>
       </div>
     </div>
+    </div><!-- /detailMode -->
   </div>
 
   <!-- SCAN PANEL -->
@@ -224,6 +276,11 @@
     <input type="text" id="stockScanInput" placeholder="รอรับข้อมูลจากเครื่องสแกน...">
     <div class="hint">กล่องเดียวกันยิงซ้ำในรอบนี้จะไม่บันทึกซ้ำใน Google Sheet</div>
     <div id="stockScanResultArea"></div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="exportAcctBtn">⬇ ส่งออก Excel ให้ฝ่ายบัญชี</button>
+    </div>
+    <div class="status" id="exportStatus"></div>
+    <div class="hint">ไฟล์มี 3 ชีท: รายกล่อง (มีช่องให้บัญชีติ๊กตรวจ) · สรุปสี×เบอร์ · กล่องที่อยู่ในระบบแต่ยังไม่ได้ยิงนับในรอบนี้</div>
     <div style="margin-top:20px;">
       <div style="font-size:.8rem; color:var(--steel-500); font-weight:700; margin-bottom:6px;">สรุปยอดรวมทั้งรอบ (ทุกกล่องที่นับแล้ว แยกตามสี × เบอร์)</div>
       <div class="table-scroll" id="stockColorSizeSummary"><div class="empty">ยังไม่มีข้อมูลสรุป</div></div>
@@ -388,7 +445,9 @@ function genBoxId(){
   const d = new Date();
   const mm = String(d.getMonth()+1).padStart(2,'0');
   const dd = String(d.getDate()).padStart(2,'0');
-  const rand = Math.random().toString(36).slice(2,5).toUpperCase();
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ตัดตัวอักษรที่ดูคล้ายกัน (0/O, 1/I)
+  let rand = '';
+  for(let i = 0; i < 4; i++) rand += alphabet[Math.floor(Math.random() * alphabet.length)];
   return `BX-${mm}${dd}-${rand}`;
 }
 document.getElementById('genIdBtn').addEventListener('click', () => {
@@ -412,11 +471,11 @@ const APP_BASE_URL = location.origin + location.pathname;
 function boxUrl(boxId){ return APP_BASE_URL + '?box=' + encodeURIComponent(boxId); }
 
 const LABEL_SIZES = {
-  '50x30': { w: 50, h: 30, qr: 22, font: 9 },
-  '40x30': { w: 40, h: 30, qr: 18, font: 8 },
-  '60x40': { w: 60, h: 40, qr: 30, font: 10 },
-  '100x50': { w: 100, h: 50, qr: 36, font: 12 },
-  'a4': { w: 210, h: 297, qr: 60, font: 16 }
+  '50x30': { w: 50, h: 30, qr: 20, font: 9, info: 8 },
+  '40x30': { w: 40, h: 30, qr: 17, font: 8, info: 7 },
+  '60x40': { w: 60, h: 40, qr: 28, font: 10, info: 9 },
+  '100x50': { w: 100, h: 50, qr: 34, font: 12, info: 11 },
+  'a4': { w: 210, h: 297, qr: 60, font: 16, info: 15 }
 };
 function getLabelSizeKey(){ return localStorage.getItem('boxqr_label_size') || '50x30'; }
 document.getElementById('labelSizeSelect').value = getLabelSizeKey();
@@ -433,7 +492,25 @@ function applyLabelPageSize(){
 }
 
 // วาด QR หนึ่งดวงลงในบล็อกป้าย แล้ว return element ที่สร้าง ใช้ได้ทั้งพิมพ์ทีละใบและหลายใบพร้อมกัน
-function buildLabelBlock(boxId, sz){
+function fmtNum(n){ return Number(n).toLocaleString('en-US'); }
+function qtyText(totalPairs){
+  return (totalPairs % 12 === 0) ? `${fmtNum(totalPairs/12)} โหล` : `${fmtNum(totalPairs)} คู่`;
+}
+// ข้อความใต้ QR: ท.5 | ส้ม | เบอร์10 | 90 โหล  (ให้คนแปะเทียบกับป้ายโรงงานได้ทันที)
+function labelInfoText(info){
+  if(!info || !info.items || !info.items.length) return '';
+  const total = info.items.reduce((s,it) => s + Number(it.qty), 0);
+  const parts = [];
+  if(info.tripNo) parts.push('ท.' + info.tripNo);
+  if(info.items.length === 1){
+    parts.push(info.items[0].color, 'เบอร์' + info.items[0].size);
+  }else{
+    parts.push('ผสม ' + info.items.length + ' รายการ');
+  }
+  parts.push(qtyText(total));
+  return parts.join(' | ');
+}
+function buildLabelBlock(boxId, sz, info){
   const wrap = document.createElement('div');
   wrap.className = 'label-block';
   wrap.style.width = sz.w + 'mm';
@@ -455,14 +532,36 @@ function buildLabelBlock(boxId, sz){
   idEl.style.fontSize = sz.font + 'px';
   idEl.textContent = boxId;
   wrap.appendChild(idEl);
+  const infoText = labelInfoText(info);
+  if(infoText){
+    const infoEl = document.createElement('div');
+    infoEl.className = 'lbl-info';
+    infoEl.style.fontSize = (sz.info || sz.font) + 'px';
+    infoEl.textContent = infoText;
+    wrap.appendChild(infoEl);
+  }
   return wrap;
 }
 
-function printLabels(boxIds){
+// infoMap: { boxId: {tripNo, items:[{color,size,qty}]} } — ถ้าไม่ส่งมา/ไม่ครบ จะดึงจากชีทครั้งเดียว (action dump)
+async function printLabels(boxIds, infoMap){
+  infoMap = infoMap || {};
+  if(boxIds.some(id => !infoMap[id])){
+    try{
+      const d = await callBackend({ action:'dump' });
+      const all = {};
+      (d.rows || []).forEach(r => {
+        if(!all[r.boxId]) all[r.boxId] = { tripNo: r.tripNo, items: [] };
+        all[r.boxId].items.push({ color: r.color, size: r.size, qty: r.qty });
+      });
+      boxIds.forEach(id => { if(!infoMap[id] && all[id]) infoMap[id] = all[id]; });
+    }catch(e){ /* พิมพ์ได้แม้ไม่มีข้อความใต้ QR */ }
+  }
   const sz = applyLabelPageSize();
   const area = document.getElementById('printArea');
   area.innerHTML = '';
-  boxIds.forEach(boxId => area.appendChild(buildLabelBlock(boxId, sz)));
+  boxIds.forEach(boxId => area.appendChild(buildLabelBlock(boxId, sz, infoMap[boxId])));
+  await new Promise(r => setTimeout(r, 200));
   window.print();
 }
 
@@ -1084,6 +1183,206 @@ cutScanInput.addEventListener('keydown', (e) => {
   if(e.key === 'Enter' && cutScanInput.value.trim()){
     loadCutBox(cutScanInput.value.trim());
     cutScanInput.value = '';
+  }
+});
+
+// ---------- quick entry mode (กรอกเร็ว: 1 กล่อง = 1 สี 1 เบอร์ กรอกเป็นโหล) ----------
+const QUICK_SIZES = ['8','8.5','9','9.5','10','10.5','11'];
+let quickColor = '', quickSize = '';
+function loadQuickColors(){
+  try{ const a = JSON.parse(localStorage.getItem('boxqr_quick_colors') || 'null'); if(Array.isArray(a) && a.length) return a; }catch(e){}
+  return ['ขาว','ดำ','ส้ม'];
+}
+function saveQuickColors(a){ localStorage.setItem('boxqr_quick_colors', JSON.stringify(a)); }
+function renderQuickChips(){
+  const cEl = document.getElementById('quickColors');
+  cEl.innerHTML = '';
+  loadQuickColors().forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip' + (c === quickColor ? ' sel' : ''); b.textContent = c;
+    b.addEventListener('click', () => { quickColor = c; renderQuickChips(); updateQuickPreview(); });
+    cEl.appendChild(b);
+  });
+  const sEl = document.getElementById('quickSizes');
+  sEl.innerHTML = '';
+  QUICK_SIZES.forEach(s => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip' + (s === quickSize ? ' sel' : ''); b.textContent = s;
+    b.addEventListener('click', () => { quickSize = s; renderQuickChips(); updateQuickPreview(); document.getElementById('quickDozen').focus(); });
+    sEl.appendChild(b);
+  });
+}
+function quickPairs(){
+  const dz = Number(document.getElementById('quickDozen').value) || 0;
+  const ex = Number(document.getElementById('quickExtra').value) || 0;
+  return Math.round(dz) * 12 + Math.round(ex);
+}
+function updateQuickPreview(){
+  const el = document.getElementById('quickPreview');
+  const pairs = quickPairs();
+  const trip = getTripInfo();
+  const tripTxt = trip.tripNo ? `เที่ยว ${trip.tripNo}` : 'ยังไม่ได้ใส่เที่ยว';
+  if(!quickColor || !quickSize || pairs <= 0){
+    el.textContent = `${tripTxt} · เลือกสี เบอร์ และใส่จำนวน`;
+    return;
+  }
+  el.textContent = `${tripTxt} · ${quickColor} · เบอร์ ${quickSize} · ${fmtNum(pairs)} คู่ (${pairs/12 % 1 === 0 ? pairs/12 + ' โหล' : (Math.floor(pairs/12) + ' โหล ' + (pairs%12) + ' คู่')})`;
+}
+['quickDozen','quickExtra'].forEach(id => document.getElementById(id).addEventListener('input', updateQuickPreview));
+['tripNoInput','receiptDateInput'].forEach(id => document.getElementById(id).addEventListener('input', updateQuickPreview));
+document.getElementById('quickAddColorBtn').addEventListener('click', () => {
+  const inp = document.getElementById('quickNewColor');
+  const v = inp.value.trim();
+  if(!v) return;
+  const arr = loadQuickColors();
+  if(!arr.includes(v)){ arr.push(v); saveQuickColors(arr); }
+  quickColor = v; inp.value = '';
+  renderQuickChips(); updateQuickPreview();
+});
+document.getElementById('quickLabelSize').value = getLabelSizeKey();
+document.getElementById('quickLabelSize').addEventListener('change', (e) => {
+  localStorage.setItem('boxqr_label_size', e.target.value);
+  document.getElementById('labelSizeSelect').value = e.target.value;
+});
+
+function todayKey(){ const d = new Date(); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
+function loadQuickRecent(){
+  try{
+    const o = JSON.parse(localStorage.getItem('boxqr_quick_recent') || 'null');
+    if(o && o.day === todayKey() && Array.isArray(o.list)) return o;
+  }catch(e){}
+  return { day: todayKey(), list: [] };
+}
+function renderQuickRecent(){
+  const o = loadQuickRecent();
+  document.getElementById('quickTodayCount').textContent = o.list.length;
+  const el = document.getElementById('quickRecent');
+  if(!o.list.length){ el.innerHTML = '<div class="empty">ยังไม่มีกล่องที่บันทึกวันนี้</div>'; return; }
+  el.innerHTML = '';
+  o.list.slice().reverse().slice(0, 15).forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'recent-item';
+    row.innerHTML = `<div><span class="id-box" style="font-size:.8rem;">${escH(r.boxId)}</span> <span>${escH(labelInfoText(r))}</span></div>`;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-ghost'; btn.textContent = 'พิมพ์ซ้ำ';
+    btn.addEventListener('click', () => printLabels([r.boxId], { [r.boxId]: r }));
+    row.appendChild(btn);
+    el.appendChild(row);
+  });
+}
+async function quickSave(){
+  const st = document.getElementById('quickStatus');
+  const pairs = quickPairs();
+  if(!quickColor){ st.textContent = 'ยังไม่ได้เลือกสี'; st.className = 'status err'; return; }
+  if(!quickSize){ st.textContent = 'ยังไม่ได้เลือกเบอร์'; st.className = 'status err'; return; }
+  if(pairs <= 0){ st.textContent = 'ยังไม่ได้ใส่จำนวน'; st.className = 'status err'; return; }
+  const trip = getTripInfo();
+  const btn = document.getElementById('quickSaveBtn');
+  btn.disabled = true; st.textContent = 'กำลังบันทึก...'; st.className = 'status';
+  try{
+    const items = [{ color: quickColor, size: quickSize, qty: pairs }];
+    let boxId = '', ok = false;
+    for(let attempt = 0; attempt < 5 && !ok; attempt++){
+      boxId = genBoxId();
+      const r = await callBackend({ action:'save', boxId, items, isNew:true, tripNo: trip.tripNo, receiptDate: trip.receiptDate, factoryBarcode: trip.factoryBarcode });
+      if(r.ok) ok = true;
+      else if(!r.exists) throw new Error('บันทึกไม่สำเร็จ');
+    }
+    if(!ok) throw new Error('สร้างรหัสกล่องไม่สำเร็จ ลองอีกครั้ง');
+    const rec = { boxId, tripNo: trip.tripNo, items };
+    const o = loadQuickRecent();
+    o.list.push(rec);
+    if(o.list.length > 300) o.list.shift();
+    localStorage.setItem('boxqr_quick_recent', JSON.stringify(o));
+    renderQuickRecent();
+    st.textContent = `บันทึกแล้ว ${boxId} · ${labelInfoText(rec)}`;
+    st.className = 'status ok';
+    // เก็บสีไว้ เคลียร์เบอร์/จำนวน (กันข้อมูลกล่องก่อนหน้าติดไปกล่องถัดไป)
+    quickSize = ''; document.getElementById('quickDozen').value = ''; document.getElementById('quickExtra').value = '';
+    renderQuickChips(); updateQuickPreview();
+    if(document.getElementById('quickAutoPrint').checked){
+      btn.disabled = false;
+      await printLabels([boxId], { [boxId]: rec });
+    }
+  }catch(e){
+    st.textContent = 'เกิดข้อผิดพลาด: ' + e.message; st.className = 'status err';
+  }finally{
+    btn.disabled = false;
+  }
+}
+document.getElementById('quickSaveBtn').addEventListener('click', quickSave);
+['quickDozen','quickExtra'].forEach(id => document.getElementById(id).addEventListener('keydown', (e) => { if(e.key === 'Enter') quickSave(); }));
+
+function setPackMode(mode){
+  const quick = mode === 'quick';
+  document.getElementById('quickMode').style.display = quick ? '' : 'none';
+  document.getElementById('detailMode').style.display = quick ? 'none' : '';
+  document.getElementById('modeQuickBtn').className = 'btn ' + (quick ? 'btn-primary' : 'btn-ghost');
+  document.getElementById('modeDetailBtn').className = 'btn ' + (quick ? 'btn-ghost' : 'btn-primary');
+  localStorage.setItem('boxqr_pack_mode', mode);
+}
+document.getElementById('modeQuickBtn').addEventListener('click', () => setPackMode('quick'));
+document.getElementById('modeDetailBtn').addEventListener('click', () => setPackMode('detail'));
+renderQuickChips(); updateQuickPreview(); renderQuickRecent();
+setPackMode(localStorage.getItem('boxqr_pack_mode') === 'detail' ? 'detail' : 'quick');
+
+// ---------- export Excel for accounting ----------
+document.getElementById('exportAcctBtn').addEventListener('click', async () => {
+  const st = document.getElementById('exportStatus');
+  const sessionId = document.getElementById('countSessionInput').value.trim();
+  const countDate = document.getElementById('countDateInput').value.trim();
+  if(!sessionId){ st.textContent = 'ยังไม่ได้ตั้งรหัสรอบนับ'; st.className = 'status err'; return; }
+  st.textContent = 'กำลังเตรียมไฟล์...'; st.className = 'status';
+  try{
+    const [cl, dump] = await Promise.all([ callBackend({ action:'countList', sessionId }), callBackend({ action:'dump' }) ]);
+    const counted = (cl.rows || []).slice().sort((a,b) => String(a.boxId).localeCompare(String(b.boxId)));
+    const dumpRows = dump.rows || [];
+    const tripByBox = {};
+    dumpRows.forEach(r => { if(r.tripNo) tripByBox[r.boxId] = r.tripNo; });
+    const dz = q => Number((Number(q)/12).toFixed(2));
+
+    // ชีท 1: รายกล่อง
+    const a1 = [['รหัสกล่อง','เที่ยว','สี','เบอร์','จำนวน (คู่)','จำนวน (โหล)','เวลายิงนับ','ผลตรวจบัญชี (✓/✗)','จำนวนที่นับได้จริง','หมายเหตุ']];
+    counted.forEach(r => r.items.forEach(it => {
+      a1.push([r.boxId, tripByBox[r.boxId] || '', it.color, it.size, Number(it.qty), dz(it.qty), r.scannedAt, '', '', '']);
+    }));
+
+    // ชีท 2: สรุปสี × เบอร์
+    const totals = {}, colorOrder = [], extraSizes = [];
+    counted.forEach(r => r.items.forEach(it => {
+      const s = String(it.size);
+      if(!SIZES.includes(s) && !extraSizes.includes(s)) extraSizes.push(s);
+      if(!totals[it.color]){ totals[it.color] = {}; colorOrder.push(it.color); }
+      totals[it.color][s] = (totals[it.color][s] || 0) + Number(it.qty);
+    }));
+    const sizes = SIZES.concat(extraSizes);
+    const a2 = [['สี', ...sizes.map(s => 'เบอร์ ' + s), 'รวม (คู่)', 'รวม (โหล)']];
+    const grand = sizes.map(() => 0);
+    colorOrder.forEach(c => {
+      let rowT = 0;
+      const cells = sizes.map((s,i) => { const q = totals[c][s] || 0; grand[i] += q; rowT += q; return q || ''; });
+      a2.push([c, ...cells, rowT, dz(rowT)]);
+    });
+    const grandAll = grand.reduce((s,q) => s + q, 0);
+    a2.push(['รวมทั้งหมด', ...grand, grandAll, dz(grandAll)]);
+
+    // ชีท 3: กล่องที่อยู่ในระบบแต่ยังไม่ได้ยิงนับในรอบนี้
+    const countedSet = new Set(counted.map(r => r.boxId));
+    const a3 = [['รหัสกล่อง','เที่ยว','สี','เบอร์','จำนวน (คู่)','จำนวน (โหล)']];
+    let missingBoxes = new Set();
+    dumpRows.filter(r => !countedSet.has(r.boxId)).sort((a,b) => String(a.boxId).localeCompare(String(b.boxId)))
+      .forEach(r => { missingBoxes.add(r.boxId); a3.push([r.boxId, r.tripNo, r.color, r.size, r.qty, dz(r.qty)]); });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a1), 'รายกล่อง');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a2), 'สรุปสี x เบอร์');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a3), 'ยังไม่ได้นับ');
+    const safe = s => String(s).replace(/[^\w฀-๿-]+/g, '-');
+    XLSX.writeFile(wb, `stockcount_${safe(sessionId)}${countDate ? '_' + safe(countDate) : ''}.xlsx`);
+    st.textContent = `ส่งออกแล้ว: นับแล้ว ${counted.length} กล่อง · ยังไม่ได้นับ ${missingBoxes.size} กล่อง`;
+    st.className = 'status ok';
+  }catch(e){
+    st.textContent = 'ส่งออกไม่สำเร็จ: ' + e.message; st.className = 'status err';
   }
 });
 
