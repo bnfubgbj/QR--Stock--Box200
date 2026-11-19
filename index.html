@@ -92,9 +92,9 @@
     #printArea{position:absolute; top:0; left:0; width:100%; display:block !important;}
   }
   #printArea{display:none;}
-  .sheet-page{display:grid; grid-template-columns:repeat(4, 48.5mm); grid-auto-rows:40mm; width:194mm; page-break-after:always; break-after:page; border-top:0.3mm dashed #555; border-left:0.3mm dashed #555;}
+  .sheet-page{display:grid; margin:8mm 8mm 0 8mm; page-break-after:always; break-after:page; border-top:0.3mm dashed #555; border-left:0.3mm dashed #555;}
   .sheet-page:last-child{page-break-after:auto; break-after:auto;}
-  .sheet-page .label-block{page-break-after:auto; border-right:0.3mm dashed #555; border-bottom:0.3mm dashed #555; padding-top:2.5mm;}
+  .sheet-page .label-block{page-break-after:auto; border-right:0.3mm dashed #555; border-bottom:0.3mm dashed #555; padding-top:2mm;}
   .chip-row{display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px;}
   .chip{padding:12px 18px; border:2px solid var(--steel-200); background:#fff; border-radius:8px; font-weight:700; font-size:1rem; cursor:pointer; font-family:var(--sans); color:var(--steel-900);}
   .chip.sel{background:var(--steel-700); border-color:var(--steel-700); color:#fff;}
@@ -182,7 +182,8 @@
           <option value="40x30">40 × 30 มม.</option>
           <option value="60x40">60 × 40 มม.</option>
           <option value="100x50">100 × 50 มม.</option>
-          <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
+          <option value="a4sheet">A4 แผ่นเดียว 32 ป้าย (มีเส้นตัด)</option>
+          <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด)</option>
           <option value="a4">A4 (ปกติ)</option>
         </select>
         <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:600;"><input type="checkbox" id="quickAutoPrint" checked style="width:auto;"> พิมพ์ป้ายอัตโนมัติ</label>
@@ -212,7 +213,8 @@
             <option value="40x30">40 × 30 มม.</option>
             <option value="60x40">60 × 40 มม.</option>
             <option value="100x50">100 × 50 มม.</option>
-            <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
+            <option value="a4sheet">A4 แผ่นเดียว 32 ป้าย (มีเส้นตัด)</option>
+          <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด)</option>
           <option value="a4">A4 (ปกติ)</option>
           </select>
           <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:600;"><input type="checkbox" id="bulkAutoPrint" checked style="width:auto;"> พิมพ์ป้ายอัตโนมัติหลังบันทึก</label>
@@ -248,7 +250,8 @@
         <option value="40x30">40 × 30 มม.</option>
         <option value="60x40">60 × 40 มม.</option>
         <option value="100x50">100 × 50 มม.</option>
-        <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
+        <option value="a4sheet">A4 แผ่นเดียว 32 ป้าย (มีเส้นตัด)</option>
+          <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด)</option>
           <option value="a4">A4 (ปกติ)</option>
       </select>
     </div>
@@ -349,7 +352,8 @@
         <option value="40x30">40 × 30 มม.</option>
         <option value="60x40">60 × 40 มม.</option>
         <option value="100x50">100 × 50 มม.</option>
-        <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
+        <option value="a4sheet">A4 แผ่นเดียว 32 ป้าย (มีเส้นตัด)</option>
+          <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด)</option>
           <option value="a4">A4 (ปกติ)</option>
       </select>
       <button class="btn btn-primary" id="batchPrintBtn">พิมพ์ป้ายที่เลือก (<span id="batchPrintCount">0</span>)</button>
@@ -524,12 +528,13 @@ const LABEL_SIZES = {
   '60x40': { w: 60, h: 40, qr: 28, font: 10, info: 9 },
   '100x50': { w: 100, h: 50, qr: 34, font: 12, info: 11 },
   'a4': { w: 210, h: 297, qr: 60, font: 16, info: 15 },
-  'a4sheet': { w: 48.5, h: 40, qr: 26, font: 9, info: 8, sheet: true, cols: 4, rows: 7 }
+  'a4sheet': { w: 48.5, h: 35, qr: 23, font: 9, info: 8, sheet: true, cols: 4, rows: 8 },
+  'a4sheet40': { w: 38.8, h: 35, qr: 22, font: 7, info: 6.5, sheet: true, cols: 5, rows: 8 }
 };
-function getLabelSizeKey(){ return localStorage.getItem('boxqr_label_size') || '50x30'; }
+function getLabelSizeKey(){ return localStorage.getItem('boxqr_label_size_v2') || 'a4sheet'; }
 document.getElementById('labelSizeSelect').value = getLabelSizeKey();
 document.getElementById('labelSizeSelect').addEventListener('change', (e) => {
-  localStorage.setItem('boxqr_label_size', e.target.value);
+  localStorage.setItem('boxqr_label_size_v2', e.target.value);
 });
 
 function applyLabelPageSize(keyOverride){
@@ -537,7 +542,7 @@ function applyLabelPageSize(keyOverride){
   const sz = LABEL_SIZES[key] || LABEL_SIZES['50x30'];
   document.getElementById('labelPageStyle').textContent =
     key === 'a4' ? `@page{ size:A4; margin:12mm; }` :
-    sz.sheet ? `@page{ size:A4; margin:8mm; }` : `@page{ size:${sz.w}mm ${sz.h}mm; margin:0mm; }`;
+    sz.sheet ? `@page{ size:A4; margin:0; }` : `@page{ size:${sz.w}mm ${sz.h}mm; margin:0mm; }`;
   return sz;
 }
 
@@ -627,6 +632,9 @@ async function printLabels(boxIds, infoMap, sizeKey){
     for(let i = 0; i < boxIds.length; i += per){
       const page = document.createElement('div');
       page.className = 'sheet-page';
+      page.style.gridTemplateColumns = `repeat(${sz.cols}, ${sz.w}mm)`;
+      page.style.gridAutoRows = sz.h + 'mm';
+      page.style.width = (sz.cols * sz.w) + 'mm';
       boxIds.slice(i, i + per).forEach(boxId => page.appendChild(buildLabelBlock(boxId, sz, infoMap[boxId])));
       area.appendChild(page);
     }
@@ -1343,7 +1351,7 @@ document.getElementById('batchDeleteBtn').addEventListener('click', async () => 
 });
 document.getElementById('batchLabelSizeSelect').value = getLabelSizeKey();
 document.getElementById('batchLabelSizeSelect').addEventListener('change', (e) => {
-  localStorage.setItem('boxqr_label_size', e.target.value);
+  localStorage.setItem('boxqr_label_size_v2', e.target.value);
 });
 document.getElementById('batchPrintBtn').addEventListener('click', () => {
   const ids = Array.from(document.querySelectorAll('.history-check:checked')).map(el => el.value);
@@ -1380,7 +1388,8 @@ async function openHistoryDetail(boxId){
           <option value="40x30">40 × 30 มม.</option>
           <option value="60x40">60 × 40 มม.</option>
           <option value="100x50">100 × 50 มม.</option>
-          <option value="a4sheet">A4 แผ่นเดียวหลายป้าย (มีเส้นตัด)</option>
+          <option value="a4sheet">A4 แผ่นเดียว 32 ป้าย (มีเส้นตัด)</option>
+          <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด)</option>
           <option value="a4">A4 (ปกติ)</option>
         </select>
         <button class="btn btn-primary" id="historyReprintBtn">พิมพ์ป้ายซ้ำ</button>
@@ -1389,7 +1398,7 @@ async function openHistoryDetail(boxId){
     drawQr('historyQr', boxUrl(result.boxId));
     document.getElementById('historyLabelSizeSelect').value = getLabelSizeKey();
     document.getElementById('historyLabelSizeSelect').addEventListener('change', (e) => {
-      localStorage.setItem('boxqr_label_size', e.target.value);
+      localStorage.setItem('boxqr_label_size_v2', e.target.value);
     });
     document.getElementById('historyReprintBtn').addEventListener('click', () => {
       printLabels([result.boxId]);
@@ -1582,7 +1591,7 @@ document.getElementById('quickAddColorBtn').addEventListener('click', () => {
 });
 document.getElementById('quickLabelSize').value = getLabelSizeKey();
 document.getElementById('quickLabelSize').addEventListener('change', (e) => {
-  localStorage.setItem('boxqr_label_size', e.target.value);
+  localStorage.setItem('boxqr_label_size_v2', e.target.value);
   document.getElementById('labelSizeSelect').value = e.target.value;
 });
 
