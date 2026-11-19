@@ -1176,7 +1176,7 @@ function camScanLoop(){
     statusEl.textContent = 'โหลดตัวอ่าน QR ไม่สำเร็จ (ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า)';
     return;
   }
-  statusEl.textContent = 'เล็ง QR ให้เต็มกรอบ ห่างประมาณ 15–25 ซม. ให้ชัด ไม่สะท้อนแสง';
+  statusEl.textContent = 'เล็ง QR ให้เต็มกรอบ ห่างประมาณ 15–25 ซม. ให้ชัด ไม่สะท้อนแสง (ตัวอ่าน: ' + (detector ? 'Chrome' : 'jsQR') + ')';
   let busyDetect = false;
 
   async function readCode(){
