@@ -1323,7 +1323,16 @@ function setPackMode(mode){
 }
 document.getElementById('modeQuickBtn').addEventListener('click', () => setPackMode('quick'));
 document.getElementById('modeDetailBtn').addEventListener('click', () => setPackMode('detail'));
-renderQuickChips(); updateQuickPreview(); renderQuickRecent();
+async function syncQuickColors(){
+  try{
+    const r = await callBackend({ action:'colors' });
+    const arr = loadQuickColors();
+    let changed = false;
+    (r.colors || []).forEach(c => { if(!arr.includes(c)){ arr.push(c); changed = true; } });
+    if(changed){ saveQuickColors(arr); renderQuickChips(); }
+  }catch(e){ /* ใช้รายชื่อสีที่มีในเครื่องต่อไป */ }
+}
+renderQuickChips(); updateQuickPreview(); renderQuickRecent(); syncQuickColors();
 setPackMode(localStorage.getItem('boxqr_pack_mode') === 'detail' ? 'detail' : 'quick');
 
 // ---------- export Excel for accounting ----------
@@ -1391,6 +1400,7 @@ function activateTab(tabName){
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabName));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tabName));
   if(tabName === 'history') loadHistory();
+  if(tabName === 'pack') syncQuickColors();
   if(tabName === 'scan') scanInput.focus();
   if(tabName === 'cut'){ loadCutLog(); cutScanInput.focus(); }
   if(tabName === 'stockcount'){ loadCountedList(); stockScanInput.focus(); }
