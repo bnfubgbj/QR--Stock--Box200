@@ -1768,7 +1768,7 @@ document.getElementById('bulkTemplateBtn').addEventListener('click', () => {
     ['สี ต้องเป็นหนึ่งใน: ' + loadQuickColors().join(', ')],
     ['เบอร์ ต้องเป็นหนึ่งใน: ' + SIZES.join(', ')],
     ['จำนวนเป็น "โหล" (เศษที่ไม่เต็มโหลใส่ในช่อง เศษ (คู่))'],
-    ['เที่ยว/วันที่รับ ถ้าเว้นว่าง จะใช้ค่าจากช่องด้านบนของหน้านี้ — วันที่ให้พิมพ์เป็นข้อความ เช่น 18/11/69'],
+    ['เที่ยว/วันที่รับ ถ้าเว้นว่าง = ไม่ระบุ (ไม่ใส่ในป้ายและชีท) — วันที่ให้พิมพ์เป็นข้อความ เช่น 18/11/69'],
     ['ลบแถวตัวอย่างออกก่อนใช้งานจริง']
   ]);
   const wb = XLSX.utils.book_new();
@@ -1792,7 +1792,6 @@ function parseBulkRows(rows){
   const cBox = find('ถัง'), cTrip = find('เที่ยว'), cDate = find('วันที่'), cColor = find('สี'), cSize = find('เบอร์'), cDoz = find('โหล'), cExtra = find('เศษ');
   if(cColor < 0 || cSize < 0 || cDoz < 0) throw new Error('ไม่พบหัวคอลัมน์ "สี", "เบอร์", "จำนวน (โหล)" — ใช้แม่แบบที่ดาวน์โหลดจากปุ่มด้านบน');
   const known = loadQuickColors().map(c => c.trim());
-  const trip0 = getTripInfo();
   const lines = [];
   for(let r = 1; r < rows.length; r++){
     const row = rows[r] || [];
@@ -1826,7 +1825,7 @@ function parseBulkRows(rows){
       if(ex) ex.qty += L.pairs; else b.items.push({ color: L.color, size: L.size, qty: L.pairs });
     }
   });
-  boxes.forEach(b => { if(!b.tripNo) b.tripNo = trip0.tripNo; if(!b.receiptDate) b.receiptDate = trip0.receiptDate; });
+  // เที่ยว/วันที่ที่เว้นว่างในไฟล์ = ไม่ระบุ (ไม่ดึงค่าจากช่องด้านบน)
   return { lines, boxes };
 }
 
