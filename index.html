@@ -94,11 +94,8 @@
   #printArea{display:none;}
   .sheet-page{display:grid; margin:8mm 8mm 0 8mm; page-break-after:always; break-after:page; border-top:0.3mm dashed #555; border-left:0.3mm dashed #555;}
   .sheet-page:last-child{page-break-after:auto; break-after:auto;}
-  .label-block.side{display:flex; text-align:left; padding:1.5mm 1mm 1mm 1.5mm; gap:1mm; align-items:flex-start;}
-  .label-block.side .side-left{flex:0 0 auto; text-align:center;}
-  .label-block.side .side-right{flex:1 1 auto; min-width:0; font-weight:700; line-height:1.25; word-break:break-word;}
-  .label-block.side .sd-head{border-bottom:0.2mm solid #000; margin-bottom:0.5mm; padding-bottom:0.3mm;}
-  .label-block.side .sd-total{border-top:0.2mm solid #000; margin-top:0.5mm; padding-top:0.3mm;}
+  .label-block .lbl-detail{font-weight:700; line-height:1.2; margin-top:0.4mm; padding:0 0.8mm; overflow:hidden;}
+  .label-block .ld-head{border-bottom:0.2mm solid #000; margin-bottom:0.3mm; padding-bottom:0.2mm; white-space:nowrap;}
   .sheet-page .label-block{page-break-after:auto; border-right:0.3mm dashed #555; border-bottom:0.3mm dashed #555; padding-top:2mm;}
   .chip-row{display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 10px;}
   .chip{padding:12px 18px; border:2px solid var(--steel-200); background:#fff; border-radius:8px; font-weight:700; font-size:1rem; cursor:pointer; font-family:var(--sans); color:var(--steel-900);}
@@ -112,7 +109,7 @@
 <body>
 
 <header>
-  <h1>ระบบบาร์โค้ดกล่องผสมสี — ฟองน้ำ 200 <span style="font-size:.6em; font-weight:400; opacity:.7;">v19-11 พิมพ์แผ่นเดียว</span></h1>
+  <h1>ระบบบาร์โค้ดกล่องผสมสี — ฟองน้ำ 200 <span style="font-size:.6em; font-weight:400; opacity:.7;">v20-11b ป้ายมีวันที่+สี/เบอร์</span></h1>
   <p>กรอกตารางสี × เบอร์ตอนรับของเข้า → ตรวจสอบก่อนยืนยัน → ได้ QR ติดกล่อง ข้อมูลอยู่บน Google Sheet เดียวกันทุกเครื่อง</p>
 </header>
 
@@ -187,7 +184,7 @@
           <option value="40x30">40 × 30 มม.</option>
           <option value="60x40">60 × 40 มม.</option>
           <option value="100x50">100 × 50 มม.</option>
-          <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีรายละเอียดสี/เบอร์)</option>
+          <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีวันที่ + สี/เบอร์)</option>
           <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด ไม่แยกสี/เบอร์)</option>
           <option value="a4">A4 (ปกติ)</option>
         </select>
@@ -219,7 +216,7 @@
             <option value="40x30">40 × 30 มม.</option>
             <option value="60x40">60 × 40 มม.</option>
             <option value="100x50">100 × 50 มม.</option>
-            <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีรายละเอียดสี/เบอร์)</option>
+            <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีวันที่ + สี/เบอร์)</option>
           <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด ไม่แยกสี/เบอร์)</option>
           <option value="a4">A4 (ปกติ)</option>
           </select>
@@ -256,7 +253,7 @@
         <option value="40x30">40 × 30 มม.</option>
         <option value="60x40">60 × 40 มม.</option>
         <option value="100x50">100 × 50 มม.</option>
-        <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีรายละเอียดสี/เบอร์)</option>
+        <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีวันที่ + สี/เบอร์)</option>
           <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด ไม่แยกสี/เบอร์)</option>
           <option value="a4">A4 (ปกติ)</option>
       </select>
@@ -358,7 +355,7 @@
         <option value="40x30">40 × 30 มม.</option>
         <option value="60x40">60 × 40 มม.</option>
         <option value="100x50">100 × 50 มม.</option>
-        <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีรายละเอียดสี/เบอร์)</option>
+        <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีวันที่ + สี/เบอร์)</option>
           <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด ไม่แยกสี/เบอร์)</option>
           <option value="a4">A4 (ปกติ)</option>
       </select>
@@ -534,7 +531,7 @@ const LABEL_SIZES = {
   '60x40': { w: 60, h: 40, qr: 28, font: 10, info: 9 },
   '100x50': { w: 100, h: 50, qr: 34, font: 12, info: 11 },
   'a4': { w: 210, h: 297, qr: 60, font: 16, info: 15 },
-  'a4sheet': { w: 48.5, h: 40, qr: 21, font: 6, info: 8.5, sheet: true, cols: 4, rows: 7, side: true },
+  'a4sheet': { w: 48.5, h: 40, qr: 20, font: 8, info: 7.5, sheet: true, cols: 4, rows: 7, detail: true },
   'a4sheet40': { w: 38.8, h: 35, qr: 22, font: 7, info: 6.5, sheet: true, cols: 5, rows: 8 }
 };
 function getLabelSizeKey(){ return localStorage.getItem('boxqr_label_size_v2') || 'a4sheet'; }
@@ -593,42 +590,7 @@ function labelDetailLines(info){
   });
   return [...g.entries()].map(([c, a]) => c + ' ' + a.join(' · '));
 }
-function buildSideLabel(boxId, sz, info){
-  const wrap = document.createElement('div');
-  wrap.className = 'label-block side';
-  wrap.style.width = sz.w + 'mm';
-  wrap.style.height = sz.h + 'mm';
-  const left = document.createElement('div');
-  left.className = 'side-left';
-  const qrHolder = document.createElement('div');
-  qrHolder.className = 'lbl-qr';
-  qrHolder.style.width = sz.qr + 'mm'; qrHolder.style.height = sz.qr + 'mm';
-  left.appendChild(qrHolder);
-  const qrPx = Math.round(sz.qr * 3.78);
-  new QRCode(qrHolder, { text: boxUrl(boxId), width: qrPx, height: qrPx, colorDark:'#000000', colorLight:'#ffffff', correctLevel: QRCode.CorrectLevel.L });
-  const qrEl = qrHolder.querySelector('canvas, table, img');
-  if(qrEl){ qrEl.style.width = sz.qr + 'mm'; qrEl.style.height = sz.qr + 'mm'; }
-  const idEl = document.createElement('div');
-  idEl.className = 'lbl-id'; idEl.style.fontSize = sz.font + 'px'; idEl.textContent = boxId;
-  left.appendChild(idEl);
-  wrap.appendChild(left);
-  const right = document.createElement('div');
-  right.className = 'side-right';
-  right.style.fontSize = sz.info + 'px';
-  const total = ((info && info.items) || []).reduce((s, it) => s + Number(it.qty), 0);
-  const head = [];
-  if(info && info.tripNo) head.push('เที่ยว ' + info.tripNo);
-  if(info && info.receiptDate) head.push(info.receiptDate);
-  const rows = [];
-  if(head.length) rows.push('<div class="sd-head">' + escH(head.join(' · ')) + '</div>');
-  labelDetailLines(info).forEach(l => rows.push('<div>' + escH(l) + '</div>'));
-  if(total) rows.push('<div class="sd-total">รวม ' + escH(dozFull(total)) + '</div>');
-  right.innerHTML = rows.join('');
-  wrap.appendChild(right);
-  return wrap;
-}
 function buildLabelBlock(boxId, sz, info){
-  if(sz.side) return buildSideLabel(boxId, sz, info);
   const wrap = document.createElement('div');
   wrap.className = 'label-block';
   wrap.style.width = sz.w + 'mm';
@@ -650,6 +612,22 @@ function buildLabelBlock(boxId, sz, info){
   idEl.style.fontSize = sz.font + 'px';
   idEl.textContent = boxId;
   wrap.appendChild(idEl);
+  if(sz.detail){
+    // บรรทัดแรก: เที่ยว · วันที่ · รวม  จากนั้นแยกบรรทัดตามสี: "ขาว 9=20 · 9.5=10" (หน่วยโหล)
+    const total = ((info && info.items) || []).reduce((s, it) => s + Number(it.qty), 0);
+    const head = [];
+    if(info && info.tripNo) head.push('ท.' + info.tripNo);
+    if(info && info.receiptDate) head.push(info.receiptDate);
+    if(total) head.push(dozFull(total));
+    const lines = labelDetailLines(info);
+    const fs = lines.length > 5 ? Math.max(5.5, sz.info - 1.2) : sz.info;
+    const box = document.createElement('div');
+    box.className = 'lbl-detail';
+    box.style.fontSize = fs + 'px';
+    box.innerHTML = (head.length ? '<div class="ld-head">' + escH(head.join(' | ')) + '</div>' : '') + lines.map(l => '<div>' + escH(l) + '</div>').join('');
+    wrap.appendChild(box);
+    return wrap;
+  }
   const infoText = labelInfoText(info);
   if(infoText){
     const infoEl = document.createElement('div');
@@ -1439,7 +1417,7 @@ async function openHistoryDetail(boxId){
           <option value="40x30">40 × 30 มม.</option>
           <option value="60x40">60 × 40 มม.</option>
           <option value="100x50">100 × 50 มม.</option>
-          <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีรายละเอียดสี/เบอร์)</option>
+          <option value="a4sheet">A4 แผ่นเดียว 28 ป้าย (มีวันที่ + สี/เบอร์)</option>
           <option value="a4sheet40">A4 แผ่นเดียว 40 ป้าย (เล็กสุด ไม่แยกสี/เบอร์)</option>
           <option value="a4">A4 (ปกติ)</option>
         </select>
