@@ -201,6 +201,7 @@
       <div class="btn-row">
         <button class="btn btn-ghost" id="bulkTemplateBtn">ดาวน์โหลดแม่แบบ Excel</button>
         <button class="btn btn-primary" id="bulkImportBtn">เลือกไฟล์ Excel</button>
+        <button class="btn btn-ghost" id="bulkClearBtn">🗑 ล้างค่า</button>
         <input type="file" id="bulkFileInput" class="file-hidden" accept=".xlsx,.xls,.csv">
       </div>
       <div class="status" id="bulkStatus"></div>
@@ -1912,6 +1913,14 @@ async function bulkSave(){
   }
 }
 document.getElementById('bulkSaveBtn').addEventListener('click', bulkSave);
+document.getElementById('bulkClearBtn').addEventListener('click', () => {
+  bulkBoxes = []; bulkFileKey = '';
+  document.getElementById('bulkPreview').innerHTML = '';
+  document.getElementById('bulkResult').innerHTML = '';
+  document.getElementById('bulkActions').style.display = 'none';
+  const st = document.getElementById('bulkStatus'); st.textContent = ''; st.className = 'status';
+  document.getElementById('bulkFileInput').value = '';
+});
 
 // ---------- tabs ----------
 function activateTab(tabName){
