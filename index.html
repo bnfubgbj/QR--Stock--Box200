@@ -109,7 +109,7 @@
 <body>
 
 <header>
-  <h1>ระบบบาร์โค้ดกล่องผสมสี — ฟองน้ำ 200 <span style="font-size:.6em; font-weight:400; opacity:.7;">v20-11b ป้ายมีวันที่+สี/เบอร์</span></h1>
+  <h1>ระบบบาร์โค้ดกล่องผสมสี — ฟองน้ำ 200 <span style="font-size:.6em; font-weight:400; opacity:.7;">v20-11c แก้ไขกล่องได้</span></h1>
   <p>กรอกตารางสี × เบอร์ตอนรับของเข้า → ตรวจสอบก่อนยืนยัน → ได้ QR ติดกล่อง ข้อมูลอยู่บน Google Sheet เดียวกันทุกเครื่อง</p>
 </header>
 
@@ -1316,11 +1316,24 @@ document.getElementById('camStartBtn').addEventListener('click', startCamera);
 document.getElementById('camStopBtn').addEventListener('click', stopCamera);
 
 // ---------- history (click a box -> shows items + QR right away, no tab switch) ----------
+function histHead(info){
+  const total = info.items.reduce((s, it) => s + Number(it.qty), 0);
+  return [info.tripNo ? 'ท.' + info.tripNo : '', info.receiptDate || '', dozFull(total)].filter(Boolean).join(' | ');
+}
 async function loadHistory(){
   const container = document.getElementById('historyContent');
   try{
-    const result = await callBackend({ action:'list' });
-    const ids = result.boxIds || [];
+    let ids = [], infoById = {};
+    try{
+      const d = await callBackend({ action:'dump' });
+      (d.rows || []).forEach(r => {
+        if(!infoById[r.boxId]){ infoById[r.boxId] = { tripNo: r.tripNo, receiptDate: r.receiptDate, items: [] }; ids.push(r.boxId); }
+        infoById[r.boxId].items.push({ color: r.color, size: r.size, qty: r.qty });
+      });
+    }catch(e){
+      const result = await callBackend({ action:'list' });
+      ids = result.boxIds || [];
+    }
     if(ids.length === 0){
       container.innerHTML = '<div class="empty">ยังไม่มีกล่องที่บันทึกไว้</div>';
       updateBatchPrintCount();
@@ -1333,7 +1346,7 @@ async function loadHistory(){
       li.innerHTML = `
         <label style="display:flex; align-items:center; gap:8px; flex:1; cursor:pointer;">
           <input type="checkbox" class="history-check" value="${boxId}" style="width:auto;">
-          <span>${boxId}</span>
+          <span><span>${boxId}</span>${infoById[boxId] ? `<div style="font-size:.8rem; color:var(--steel-500); line-height:1.35;">${escH(histHead(infoById[boxId]))}<br>${escH(labelDetailLines(infoById[boxId]).join(' ; '))}</div>` : ''}</span>
         </label>
         <span class="pill" style="cursor:pointer;">ดูรายละเอียด + QR</span>`;
       li.querySelector('span.pill').addEventListener('click', () => openHistoryDetail(boxId));
@@ -1388,6 +1401,68 @@ document.getElementById('batchPrintBtn').addEventListener('click', () => {
   printLabels(ids);
 });
 
+// ---------- แก้ไขข้อมูลกล่อง (รหัส/QR เดิม ไม่เปลี่ยน) ----------
+function openHistoryEdit(box){
+  const body = document.getElementById('historyModalBody');
+  const colors = loadQuickColors().slice();
+  box.items.forEach(it => { if(!colors.includes(it.color)) colors.push(it.color); });
+  const sizeOpts = SIZES.slice();
+  box.items.forEach(it => { if(!sizeOpts.includes(String(it.size))) sizeOpts.push(String(it.size)); });
+  const rowHtml = (it) => {
+    const q = Number(it.qty) || 0;
+    return `<tr>
+      <td><select class="ed-color">${colors.map(c => `<option value="${escH(c)}"${c === it.color ? ' selected' : ''}>${escH(c)}</option>`).join('')}</select></td>
+      <td><select class="ed-size">${sizeOpts.map(s => `<option value="${escH(s)}"${s === String(it.size) ? ' selected' : ''}>${escH(s)}</option>`).join('')}</select></td>
+      <td><input type="number" class="ed-doz" min="0" step="1" value="${Math.floor(q / 12)}" style="width:80px;"></td>
+      <td><input type="number" class="ed-extra" min="0" max="11" step="1" value="${q % 12 || ''}" placeholder="0" style="width:64px;"></td>
+      <td><button class="btn btn-ghost ed-del" type="button" title="ลบแถว">✕</button></td>
+    </tr>`;
+  };
+  body.innerHTML = `
+    <div class="id-box">${escH(box.boxId)}</div>
+    <div class="hint">แก้แล้วกดบันทึก — รหัสกล่องและ QR ที่แปะไว้ใช้ต่อได้เลย แต่ป้ายที่พิมพ์ไว้ข้อความจะไม่เปลี่ยน ต้องพิมพ์ใหม่ไปแปะทับ ถ้ากล่องนี้ถูกยิงนับไปแล้ว ผลนับเดิมไม่เปลี่ยน ให้ยกเลิกการนับกล่องนี้แล้วยิงใหม่</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin:8px 0;">
+      <label style="flex:1; min-width:90px;">เที่ยว<input type="text" id="edTrip" value="${escH(box.tripNo || '')}"></label>
+      <label style="flex:2; min-width:130px;">วันที่รับ<input type="text" id="edDate" value="${escH(box.receiptDate || '')}" placeholder="18/11/69"></label>
+    </div>
+    <table><thead><tr><th>สี</th><th>เบอร์</th><th>จำนวน (โหล)</th><th>เศษ (คู่)</th><th></th></tr></thead><tbody id="edBody">${box.items.map(rowHtml).join('')}</tbody></table>
+    <div class="btn-row"><button class="btn btn-ghost" id="edAddRow" type="button">+ เพิ่มแถว</button></div>
+    <div class="status" id="edStatus"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="edCancel" type="button">ยกเลิก</button>
+      <button class="btn btn-primary" id="edSave" type="button">บันทึกการแก้ไข</button>
+    </div>`;
+  const tb = document.getElementById('edBody');
+  tb.addEventListener('click', (e) => { if(e.target.classList.contains('ed-del')) e.target.closest('tr').remove(); });
+  document.getElementById('edAddRow').addEventListener('click', () => {
+    tb.insertAdjacentHTML('beforeend', rowHtml({ color: colors[0], size: SIZES[3], qty: 0 }));
+  });
+  document.getElementById('edCancel').addEventListener('click', () => openHistoryDetail(box.boxId));
+  document.getElementById('edSave').addEventListener('click', async () => {
+    const st = document.getElementById('edStatus');
+    const merged = new Map();
+    tb.querySelectorAll('tr').forEach(tr => {
+      const color = tr.querySelector('.ed-color').value, size = tr.querySelector('.ed-size').value;
+      const pairs = Math.round((parseFloat(tr.querySelector('.ed-doz').value) || 0) * 12) + Math.round(parseFloat(tr.querySelector('.ed-extra').value) || 0);
+      if(pairs <= 0) return;
+      const k = color + '|' + size;
+      merged.set(k, { color, size, qty: (merged.get(k) ? merged.get(k).qty : 0) + pairs });
+    });
+    const items = [...merged.values()];
+    if(!items.length){ st.textContent = 'ต้องมีอย่างน้อย 1 รายการที่จำนวนมากกว่า 0 (ถ้าต้องการเอากล่องออก ให้ใช้ปุ่มลบกล่อง)'; st.className = 'status err'; return; }
+    const btn = document.getElementById('edSave'); btn.disabled = true;
+    st.textContent = 'กำลังบันทึก...'; st.className = 'status';
+    try{
+      const r = await callBackend({ action:'save', boxId: box.boxId, items, tripNo: document.getElementById('edTrip').value.trim(), receiptDate: document.getElementById('edDate').value.trim(), factoryBarcode: box.factoryBarcode || '' });
+      if(!r.ok) throw new Error('บันทึกไม่สำเร็จ');
+      await openHistoryDetail(box.boxId);
+      loadHistory();
+    }catch(e){
+      st.textContent = 'บันทึกไม่สำเร็จ: ' + e.message; st.className = 'status err'; btn.disabled = false;
+    }
+  });
+}
+
 async function openHistoryDetail(boxId){
   const modal = document.getElementById('historyModal');
   const body = document.getElementById('historyModalBody');
@@ -1422,6 +1497,7 @@ async function openHistoryDetail(boxId){
           <option value="a4">A4 (ปกติ)</option>
         </select>
         <button class="btn btn-primary" id="historyReprintBtn">พิมพ์ป้ายซ้ำ</button>
+        <button class="btn btn-ghost" id="historyEditBtn">✏️ แก้ไขข้อมูลกล่อง</button>
         <button class="btn btn-ghost" id="historyDeleteBtn" style="color:var(--danger); border-color:var(--danger);">🗑 ลบกล่องนี้</button>
       </div>`;
     drawQr('historyQr', boxUrl(result.boxId));
@@ -1432,6 +1508,7 @@ async function openHistoryDetail(boxId){
     document.getElementById('historyReprintBtn').addEventListener('click', () => {
       printLabels([result.boxId]);
     });
+    document.getElementById('historyEditBtn').addEventListener('click', () => openHistoryEdit(result));
     document.getElementById('historyDeleteBtn').addEventListener('click', async () => {
       if(await deleteBoxesFlow([result.boxId])){
         document.getElementById('historyModal').classList.remove('show');
